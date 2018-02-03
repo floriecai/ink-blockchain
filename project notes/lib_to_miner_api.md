@@ -6,26 +6,50 @@ Purpose: To agree on the calls and returns supported by our miner's rpc to make 
 ## OpenCanvas
 
 * Calls miner.OpenCanvas()
-* gives private_key
-* gets struct{settings, genesis block}
+* gives []byte(“hi”) -> ecdsa.Sign(miner’s_priv_key)
+* (on the miner: he will verify with his public key, generate an ID to use for every future rpc)
+* gets struct{generated_ID, settings, genesis block}
 
 ## CloseCanvas
 
 * Calls miner.GetInk()
-* gives private key
+* gives []byte(id), signed with private key
 * gets struct{ink_remaining}
 
 ## AddShape
 
 * Calls miner.Draw()
-* gives struct{private_key, svg_string}
+* gives struct{id, svg_string}, signed with private key
 * gets struct{shapehash, blockhash, ink_remaining}
 
 ## DeleteShape
 
 * calls miner.Delete()
-* gives struct{private_key, shapehash}
-* gets ?
+* gives struct{id, private_key, shapehash}, signed with private key
+* gets struct{ink_remaining}
 
-## TODO: FINISH
+## GetInk
+
+* calls miner.GetInk()
+* gives []byte(id), signed with private key
+* gets struct{ink_remaining}
+
+
+## GetShapes
+
+* calls miner.GetBlockChain()
+* gives []byte(id), signed with private key
+* gets array of blocks
+
+## GetChildren
+
+* calls miner.GetBlockChain()
+* gives []byte(id), signed with private key
+* gets array of blocks
+
+## GetGenesisBlock
+
+* calls miner.GetGenesisBlock()
+* gives []byte(id), signed with private key
+* gets struct{hash_of_genesis block}
 
