@@ -7,8 +7,14 @@ library (blockartlib) to be used in project 1 of UBC CS 416 2017W2.
 
 package blockartlib
 
-import "crypto/ecdsa"
-import "fmt"
+import (
+	"crypto/ecdsa"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+const MAX_SVG_LEN = 128
 
 // Represents a type of shape in the BlockArt system.
 type ShapeType int
@@ -142,6 +148,7 @@ type Canvas interface {
 	// - ShapeOverlapError
 	// - OutOfBoundsError
 	AddShape(validateNum uint8, shapeType ShapeType, shapeSvgString string, fill string, stroke string) (shapeHash string, blockHash string, inkRemaining uint32, err error)
+	// aDD SHAPE blocks until number of blocks (validateNum) follow current block
 
 	// Returns the encoding of the shape as an svg string.
 	// Can return the following errors:
@@ -180,6 +187,107 @@ type Canvas interface {
 	// Closes the canvas/connection to the BlockArt network.
 	// - DisconnectedError
 	CloseCanvas() (inkRemaining uint32, err error)
+}
+
+type SVGCommand interface {
+	isExpr()
+}
+
+type MCommand struct {
+	IsRelative bool
+	X          int
+	Y          int
+}
+
+func (c MCommand) isExpr() {}
+
+type LCommand struct {
+	IsRelative bool
+	X          int
+	Y          int
+}
+
+func (c LCommand) isExpr() {}
+
+type HCommand struct {
+	IsRelative bool
+	Y          int
+}
+
+func (c HCommand) isExpr() {}
+
+type VCommand struct {
+	IsRelative bool
+	X          int
+}
+
+func (c VCommand) isExpr() {}
+
+type ZCommand struct{}
+
+func (c ZCommand) isExpr() {}
+
+type SVGPath []SVGCommand
+
+// Parses a string into a list of SVGCommands
+// Returns an ordered list of SVGCommands that denote an SVGPath
+// Possible Errors: InvalidShapeSvgStringError
+func getParsedSVG(svgString string) (svgPath SVGPath, err error) {
+	if len(svgString) > MAX_SVG_LEN {
+		return svgPath, InvalidShapeSvgStringError(svgString)
+	}
+
+	tokens := strings.Split(svgString, " ")
+	tokenLen := len(tokens)
+	i := 0
+	for i < tokenLen {
+		var svgCommand SVGCommand
+		tokenUpper := strings.ToUpper(tokens[i])
+		token := tokens[i]
+
+		var param1, param2 int
+		if tokenUpper == "L" || tokenUpper == "M" {
+			if i+2 < tokenLen {
+				param1, err = strconv.Atoi(tokens[i+1])
+				if err != nil {
+					return svgPath, InvalidShapeSvgStringError(svgString)
+				}
+				param2, err = strconv.Atoi(tokens[i+2])
+				if err != nil {
+					return svgPath, InvalidShapeSvgStringError(svgString)
+				}
+			}
+
+			if tokenUpper == "L" {
+				svgCommand = LCommand{X: param1, IsRelative: token == "l"}
+			} else {
+				svgCommand = MCommand{X: param1, Y: param2, IsRelative: token == "m"}
+			}
+			i += 3
+		} else if tokenUpper == "V" || tokenUpper == "H" {
+			if i+1 < tokenLen {
+				param1, err = strconv.Atoi(tokens[i+1])
+				if err != nil {
+					return svgPath, InvalidShapeSvgStringError(svgString)
+				}
+			}
+
+			if token == "V" {
+				svgCommand = VCommand{X: param1, IsRelative: token == "v"}
+			} else {
+				svgCommand = HCommand{Y: param1, IsRelative: token == "h"}
+			}
+			svgPath = append(svgPath, svgCommand)
+			i += 2
+		} else if tokenUpper == "Z" {
+			svgPath = append(svgPath, ZCommand{})
+			i++
+		} else {
+			return svgPath, err
+		}
+	}
+
+	return svgPath, nil
 }
 
 // The constructor for a new Canvas object instance. Takes the miner's
