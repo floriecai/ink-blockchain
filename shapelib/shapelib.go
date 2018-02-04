@@ -352,7 +352,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 				}
 
 				yThresh = int(slope * x + intercept + 0.5)
-				xPrev := int(x)
+				xPrev = int(x)
 				x++
 
 				if (y != yThresh) {
@@ -380,7 +380,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 				}
 
 				yThresh = int(slope * x + intercept + 0.5)
-				xPrev := int(x)
+				xPrev = int(x)
 				x++
 
 				if (y != yThresh) {
@@ -414,7 +414,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 				}
 
 				yThresh = int(slope * x + intercept + 0.5)
-				xPrev := int(x)
+				xPrev = int(x)
 				x--
 
 				if (y != yThresh) {
@@ -442,7 +442,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 				}
 
 				yThresh = int(slope * x + intercept + 0.5)
-				xPrev := int(x)
+				xPrev = int(x)
 				x--
 
 				if (y != yThresh) {
