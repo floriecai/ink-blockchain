@@ -3,18 +3,17 @@
 This package is intended to be used to verify that shapes are not conflicting
 with each other.
 
-*/
+TODO:
+ - Circle implementation. Honestly probably easier than Path...
+ - Create a function that creates a Path object based on just a
+   Point slice
 
-/*
-Fill notes:
-- Special case for horizontal lines only: NO-OP for horizontal fill
-All other lines: & current position and ^ everything to the right.
-
-Line notes:
-- Set the bit in both the floor (floor + 1) of the x-coordinate if the
-previous x-coordnate is not the same as the current. This guarantees
-that the pixels are continuous, and intersecting lines will always have
-a conflict.
+   Search-index:
+      TYPE_DEFINITIONS
+      FUNCTION_DEFINITIONS
+        PIXEL_ARRAY_FUNCTIONS
+        PIXEL_SUB_ARRAY_FUNCTIONS
+        PATH_FUNCTIONS
 */
 
 package shapelib
@@ -23,7 +22,9 @@ import (
 	"fmt"
 )
 
-// TYPE DEFINITIONS
+/*******************
+* TYPE_DEFINITIONS *
+*******************/
 
 // Array of pixels. (Max - 1) is the last index that is accessible.
 type PixelArray [][]byte
@@ -36,7 +37,7 @@ type PixelSubArray struct {
 	yStart int
 }
 
-// Array of Point structs in some order.
+// Represents the data of a Path SVG item.
 // Any closed shape must have the last point in the
 // array be equal to the first point. So a quadrilateral
 // should have len(Points) == 5 and  Points[0] is equal
@@ -44,25 +45,42 @@ type PixelSubArray struct {
 type Path struct {
 	Points []Point
 	Filled bool
+	// The below 4 values should create a rectangle that
+	// can fit the entire path within it.
 	XMin int
 	XMax int
 	YMin int
 	YMax int
 }
 
-// Point
+// Point. Represents a point or pixel on a discrete 2D array.
+// All points should be in the 1st quadrant (x >= 0, y >= 0)
 type Point struct {
 	X int
 	Y int
 }
 
-// Circle
+// Circle. Not much more to say really.
 type Circle struct {
 	C Point
 	R int
+	Filled bool
 }
 
-/* Function definitions */
+// Used for computing shit for the Path object.
+type slopeType int
+const (
+	POSRIGHT slopeType = iota
+	NEGRIGHT
+	POSLEFT
+	NEGLEFT
+	INFUP
+	INFDOWN
+)
+
+/***********************
+* FUNCTION_DEFINITIONS *
+************************/
 
 // Gets the maximum byte index for a PixelArray's columns.
 // Computes the minimum number of bytes needed to contain
@@ -84,7 +102,7 @@ func getSlopeIntercept(p1 Point, p2 Point) (slope float64, intercept float64) {
 	return slope, intercept
 }
 
-/* Functions related to pixel arrays */
+/* PIXEL_ARRAY_FUNCTIONS */
 
 // Returns a new pixel array that is fully zeroed.
 func NewPixelArray(xMax int, yMax int) PixelArray {
@@ -107,26 +125,6 @@ func NewPixelArray(xMax int, yMax int) PixelArray {
 	return a
 }
 
-// Returns a new pixel sub array.
-func NewPixelSubArray(xStart int, xEnd int, yStart int, yEnd int) PixelSubArray {
-	// Set up the values for the sub array struct
-	xStartByte := xStart / 8
-	xSizeByte := maxByte(xEnd) - xStartByte
-	ySize := yEnd - yStart + 1
-
-	a := make([][]byte, ySize)
-
-	for y := 0; y < ySize; y++ {
-		a[y] = make([]byte, xSizeByte)
-
-		for x := 0; x < xSizeByte; x++ {
-			a[y][x] = 0;
-		}
-	}
-
-	return PixelSubArray { a, xStartByte, yStart }
-}
-
 // Checks if there is a conflict between the PixelArray and
 // a PixelSubArray.
 func (a PixelArray)HasConflict(sub PixelSubArray) bool {
@@ -146,7 +144,7 @@ func (a PixelArray)HasConflict(sub PixelSubArray) bool {
 	}
 
 	// Compare the bytes using bitwise &. If there is a conflict,
-	// there should be some byte that has issues.
+	// there should be some bitwise & that != 0.
 	for y := sub.yStart; y < yLast; y++ {
 		ySub := y - sub.yStart
 
@@ -193,7 +191,7 @@ func (a *PixelArray)MergeSubArray(sub PixelSubArray) {
 	}
 }
 
-// Print a bit array cuz y da fook not.
+// Prints the bits in the array.
 func (a PixelArray)Print() {
 	for y := len(a) - 1; y >= 0; y-- {
 		fmt.Printf("%d\t", y)
@@ -211,6 +209,28 @@ func (a PixelArray)Print() {
 
 		fmt.Printf("\n")
 	}
+}
+
+/* PIXEL_SUB_ARRAY_FUNCTIONS */
+
+// Returns a new pixel sub array.
+func NewPixelSubArray(xStart int, xEnd int, yStart int, yEnd int) PixelSubArray {
+	// Set up the values for the sub array struct
+	xStartByte := xStart / 8
+	xSizeByte := maxByte(xEnd) - xStartByte
+	ySize := yEnd - yStart + 1
+
+	a := make([][]byte, ySize)
+
+	for y := 0; y < ySize; y++ {
+		a[y] = make([]byte, xSizeByte)
+
+		for x := 0; x < xSizeByte; x++ {
+			a[y][x] = 0;
+		}
+	}
+
+	return PixelSubArray { a, xStartByte, yStart }
 }
 
 // Set the bit on the given co-ordinate
@@ -238,6 +258,8 @@ func (a *PixelSubArray)flipAllRight(x, y int) {
 	}
 }
 
+// Prints the bits in the array. There is no on the screen
+// for where the sub-array is meant to be located
 func (a PixelSubArray)Print() {
 	for y := len(a.bytes) - 1; y >= 0; y-- {
 		for x := 0; x < len(a.bytes[0]); x++ {
@@ -256,81 +278,79 @@ func (a PixelSubArray)Print() {
 	}
 }
 
-/* Functions related to Shapes */
+/* PATH_FUNCTIONS */
 
-// Generates an iterator for a line.
-func linePointsGen(p1, p2 Point) (gen func () (x, y int),
-xStart, yStart, direction int) {
-	type SlopeType int
-	const (
-		POS SlopeType = iota
-		NEG
-		INF
-	)
-
-	var slopeType SlopeType
-	var slope, intercept float64
-	var xEnd, yEnd int
-
-	// Set up math
+// Get slope type, slope, and intercept for a a pair of points
+func getLineParams(p1, p2 Point) (sT slopeType, slope, intercept float64) {
 	if p1.X == p2.X {
-		xStart = p1.X
-		xEnd = p1.X
-		slopeType = INF
-
+		// Check for infinite slope.
 		if p2.Y > p1.Y {
-			yStart = p1.Y
-			yEnd = p2.Y
+			sT = INFUP
 		} else {
-			yStart = p2.Y
-			yEnd = p1.Y
+			sT = INFDOWN
 		}
+
+		slope, intercept = 0, 0
 	} else {
+		// 4 classifications of non infinite slope based
+		// on the relative positions of p1 and p2
+		slope, intercept = getSlopeIntercept(p1, p2)
 		if p1.X < p2.X {
-			slope, intercept = getSlopeIntercept(p1, p2)
-
-			xStart = p1.X
-			xEnd = p2.X
-			yStart = p1.Y
-			yEnd = p2.Y
+			if slope >= 0 {
+				fmt.Println("POSRIGHT slope")
+				sT = POSRIGHT
+			} else {
+				fmt.Println("NEGRIGHT slope")
+				sT = NEGRIGHT
+			}
 		} else {
-			slope, intercept = getSlopeIntercept(p2, p1)
-
-			xStart = p2.X
-			xEnd = p1.X
-			yStart = p2.Y
-			yEnd = p1.Y
-		}
-
-		if slope >= 0 {
-			fmt.Println("POS slope")
-			slopeType = POS
-		} else {
-			fmt.Println("NEG slope")
-			slopeType = NEG
+			if slope >= 0 {
+				fmt.Println("POSLEFT slope")
+				sT = POSLEFT
+			} else {
+				fmt.Println("NEGLEFT slope")
+				sT = NEGLEFT
+			}
 		}
 	}
 
-	x := float64(xStart)
-	y := yStart
+	return sT, slope, intercept
+}
+
+// Generates an iterator for a line.  What a mess.
+func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
+	// Set up math
+	slopeT, slope, intercept := getLineParams(p1, p2)
+
+	x := float64(p1.X)
+	xPrev := int(x)
+	y := p1.Y
 	yThresh := 0
 
-	switch slopeType {
-	case POS:
+	// Every slope type has a different iterator, since the change the
+	// x and y values in different combinations, as well as do different
+	// comparisons on the values.
+	switch slopeT {
+	case POSRIGHT:
 		if slope == 0 {
-			direction = -1
+			vertDirection = 0
 		} else {
-			direction = 1
+			vertDirection = 1
 		}
 
 		return func() (int, int) {
-			if (int(x) > xEnd || y > yEnd) {
-				fmt.Println("x,y,xend,yend:",x,y,xEnd,yEnd)
-				return -1, -1
-			} else if y < yThresh {
+			if y < yThresh {
+				if y > p2.Y {
+					return -1, -1
+				}
+
 				y++
-				return int(x), y
+				return xPrev, y
 			} else {
+				if int(x) > p2.X {
+					return -1, -1
+				}
+
 				yThresh = int(slope * x + intercept + 0.5)
 				xPrev := int(x)
 				x++
@@ -341,21 +361,24 @@ xStart, yStart, direction int) {
 
 				return xPrev, y
 			}
-		}, xStart, yStart, direction
-	case NEG:
-		direction = 0
+		}, vertDirection
+	case NEGRIGHT:
+		vertDirection = -1
 		yThresh = int(slope * x + intercept + 0.5)
 
 		return func () (int, int) {
-			if (int(x) > xEnd || y < yEnd) {
-				fmt.Println("x,y,xend,yend:",x,y,xEnd,yEnd)
-				return -1, -1
-			}
-
 			if y > yThresh {
+				if y < p2.Y {
+					return -1, -1
+				}
+
 				y--
-				return int(x), y
+				return xPrev, y
 			} else {
+				if int(x) > p2.X {
+					return -1, -1
+				}
+
 				yThresh = int(slope * x + intercept + 0.5)
 				xPrev := int(x)
 				x++
@@ -366,64 +389,141 @@ xStart, yStart, direction int) {
 
 				return xPrev, y
 			}
-		}, xStart, yStart, direction
-	case INF:
-		direction = 1
+		}, vertDirection
+	case POSLEFT:
+		if slope == 0 {
+			vertDirection = 0
+		} else {
+			vertDirection = -1
+			fmt.Println("POSLEFT, slope:", slope)
+		}
+
+		yThresh = int(slope * x + intercept + 0.5)
+
+		return func() (int, int) {
+			if y > yThresh {
+				if y < p2.Y {
+					return -1, -1
+				}
+
+				y--
+				return xPrev, y
+			} else {
+				if int(x) < p2.X {
+					return -1, -1
+				}
+
+				yThresh = int(slope * x + intercept + 0.5)
+				xPrev := int(x)
+				x--
+
+				if (y != yThresh) {
+					y--
+				}
+
+				return xPrev, y
+			}
+		}, vertDirection
+	case NEGLEFT:
+		vertDirection = 1
+		fmt.Println("NEGLEFT, slope:", slope)
 
 		return func () (int, int) {
-			if (int(x) > xEnd || y > yEnd) {
+			if y < yThresh {
+				if y > p2.Y {
+					return -1, -1
+				}
+
+				y++
+				return xPrev, y
+			} else {
+				if int(x) < p2.X {
+					return -1, -1
+				}
+
+				yThresh = int(slope * x + intercept + 0.5)
+				xPrev := int(x)
+				x--
+
+				if (y != yThresh) {
+					y++
+				}
+
+				return xPrev, y
+			}
+		}, vertDirection
+	case INFUP:
+		vertDirection = 1
+
+		return func () (int, int) {
+			if (y > p2.Y) {
 				return -1, -1
 			}
 
 			yPrev := y
 			y++
 			return int(x), yPrev
-		}, xStart, yStart, direction
+		}, vertDirection
+	case INFDOWN:
+		vertDirection = -1
+
+		return func () (int, int) {
+			if (y < p2.Y) {
+				return -1, -1
+			}
+
+			yPrev := y
+			y--
+			return int(x), yPrev
+		}, vertDirection
 	}
 
-	return nil, -1, -1, -1
+	return nil, -1
 }
 
-// Generate a sub array for a shape
+// Generate a sub array for the Path object.
+// Will fill based on the Filled field of Path.
 func (p Path)GetSubArray() PixelSubArray {
 	// Create a new sub array that can fit the Path
 	sub := NewPixelSubArray(p.XMin, p.XMax, p.YMin, p.YMax)
-	prevDirection := -2
 
-	firstX := p.Points[0].X
-	firstY := p.Points[0].Y
-	lastYFilled := -1
+	// Initialize some values. Need to get start since filling the very
+	// last point twice needs to be avoided.
+	prevVertDir := -2
+	xStart := p.Points[0].X
+	yStart := p.Points[0].Y
 
 	for i := 0; i < len(p.Points) - 1; i++ {
-		nextPoint, x, prevY, direction := linePointsGen(p.Points[i],
-		p.Points[i+1])
+		// Get the iterator for pixels along a line between points.
+		nextPoint, vertDir := linePointsGen(p.Points[i], p.Points[i+1])
 
-		var y int
+		// Random crap that seems to work.
+		yPrev := p.Points[i].Y
+		if p.Filled && prevVertDir != vertDir && prevVertDir != 0 {
+			sub.flipAllRight(p.Points[i].X, yPrev)
+		}
 
-		prevDirection = direction
+		prevVertDir = vertDir
 
-		fmt.Println("Next point")
-		for x, y = nextPoint(); x != -1; x, y = nextPoint() {
-			fmt.Println("Pixel (x,y):", x, y)
-
-			if y != prevY {
-				if p.Filled {
-					if (direction != prevDirection || y != lastYFilled) && direction != -1 {
-						if !(x == firstX && x == firstY) {
-						sub.flipAllRight(x, y)
-					}
-					}
+		// Fill in the pixels provided by the iterator
+		for x, y := nextPoint(); x != -1; x, y = nextPoint() {
+			if y != yPrev {
+				if p.Filled && vertDir != 0 &&
+						!(x == xStart && y == yStart) {
+					sub.flipAllRight(x, y)
 				}
 
-				sub.set(x, prevY)
-
-				prevY = y
+				// Set after fill so bit doesn't get flipped
+				// This set is done to make sure that the pixels
+				// are continuous; such as in a 45 degree line.
+				sub.set(x, yPrev)
+				yPrev = y
 			}
 
+			// Set after potential fill - see above
 			sub.set(x, y)
 		}
 	}
-
 
 	return sub
 }
