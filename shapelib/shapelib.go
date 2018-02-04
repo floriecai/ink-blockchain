@@ -3,13 +3,10 @@
 This package is intended to be used to verify that shapes are not conflicting
 with each other.
 
-This file in particular contains all type definitions and some miscellaneous functions
+This file in particular contains all type definitions and some misc. functions
 
 TODO:
  - Circle implementation. Honestly probably easier than Path...
- - Create a function that creates a Path object based on just a
-   Point slice
-
 */
 
 package shapelib
@@ -34,7 +31,7 @@ type PixelSubArray struct {
 // Represents the data of a Path SVG item.
 // Any closed shape must have the last point in the
 // array be equal to the first point. So a quadrilateral
-// should have len(Points) == 5 and  Points[0] is equal
+// should have len(Points) == 5 and Points[0] is equal
 // to Points[4].
 type Path struct {
 	Points []Point
@@ -52,6 +49,7 @@ type Path struct {
 type Point struct {
 	X int
 	Y int
+	Moved bool
 }
 
 // Circle. Not much more to say really.
@@ -101,8 +99,10 @@ func getLineParams(p1, p2 Point) (sT slopeType, slope, intercept float64) {
 	if p1.X == p2.X {
 		// Check for infinite slope.
 		if p2.Y > p1.Y {
+			fmt.Println("INFUP slope")
 			sT = INFUP
 		} else {
+			fmt.Println("INFDOWN slope")
 			sT = INFDOWN
 		}
 
@@ -143,7 +143,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 	y := p1.Y
 	yThresh := 0
 
-	// Every slope type has a different iterator, since the change the
+	// Every slope type has a different iterator, since they change the
 	// x and y values in different combinations, as well as do different
 	// comparisons on the values.
 	switch slopeT {

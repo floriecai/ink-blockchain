@@ -101,7 +101,7 @@ func (a PixelArray)Print() {
 	for y := len(a) - 1; y >= 0; y-- {
 		fmt.Printf("%d\t", y)
 		for x := 0; x < len(a[0]); x++ {
-			fmt.Printf("%b%b%b%b%b%b%b%b",
+			fmt.Printf("%b%b%b%b%b%b%b%b ",
 			(a[y][x]) & 1,
 			(a[y][x] >> 1) & 1,
 			(a[y][x] >> 2) & 1,
@@ -159,7 +159,14 @@ func (a *PixelSubArray)flipAllRight(x, y int) {
 		a.bytes[yRow][xByte] ^= (1 << i)
 	}
 
+	if yRow == 0 {
+		fmt.Println("row 0; xByte, xBit", xByte, xBit)
+	}
+
 	for i := xByte + 1; i < len(a.bytes[0]); i++ {
+	if yRow == 0 {
+		fmt.Println("Filling all of byte", i)
+	}
 		a.bytes[yRow][i] ^= 0xFF
 	}
 }
