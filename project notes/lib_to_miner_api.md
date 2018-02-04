@@ -8,7 +8,7 @@ Purpose: To agree on the calls and returns supported by our miner's rpc to make 
 * Calls miner.OpenCanvas()
 * gives []byte(“hi”) -> ecdsa.Sign(miner’s_priv_key)
 * (on the miner: he will verify with his public key, generate an ID to use for every future rpc)
-* gets struct{generated_ID, settings, genesis block}
+* gets struct{generated_ID, settings} //do we need genesis block? don't think so
 
 ## CloseCanvas
 
@@ -51,5 +51,5 @@ Purpose: To agree on the calls and returns supported by our miner's rpc to make 
 
 * calls miner.GetGenesisBlock()
 * gives []byte(id), signed with private key
-* gets struct{hash_of_genesis block}
+* gets hash_of_genesis_block string
 
