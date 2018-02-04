@@ -3,10 +3,42 @@
 This package is intended to be used to verify that shapes are not conflicting
 with each other.
 
-This file in particular contains all type definitions and some misc. functions
+Public functions:
+
+	NewPath(points []Point, filled bool) -> Path
+
+	NewPixelArray(xMax int, yMax int) -> PixelArray
+
+	NewPixelSubArray(xStart, xEnd, yStart, yEnd int) -> PixelSubArray
+
+
+Public types and methods:
+
+	PixelArray
+	  Print()
+	  HasConflict(sub PixelSubArray) -> bool
+	  MergeSubArray(sub PixelSubArray)
+
+	PixelSubArray
+	  Print()
+
+	Point
+
+	Path
+	  GetSubArray() -> PixelSubArray
+
+	Circle
+	  GetSubArray() -> PixelSubArray (NYI)
+
+*/
+
+/*
+
+This file in particular contains all type definitions and some misc. functions.
 
 TODO:
  - Circle implementation. Honestly probably easier than Path...
+
 */
 
 package shapelib
