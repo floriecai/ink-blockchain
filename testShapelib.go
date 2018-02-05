@@ -12,7 +12,7 @@ func main() {
 	points[1] = shapelib.Point {150, 80, false }
 	points[2] = shapelib.Point {160, 299, false }
 	points[3] = shapelib.Point {450, 150, false }
-	points[4] = shapelib.Point {600, 250, false }
+	points[4] = shapelib.Point {599, 250, false }
 	points[5] = shapelib.Point {590, 30, false }
 	points[6] = shapelib.Point {299, 150, false }
 	points[7] = shapelib.Point {150, 30, false }
@@ -72,7 +72,7 @@ func main() {
 
 	fmt.Println("Pixels filled:", sub1.GetPixelsFilled())
 
-	a := shapelib.NewPixelArray(608, 400)
+	a := shapelib.NewPixelArray(599, 400)
 	a.MergeSubArray(sub1)
 	//fmt.Println("Square circle conflict?", a.HasConflict(sub2))
 	a.Print()
