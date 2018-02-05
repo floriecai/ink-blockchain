@@ -47,11 +47,12 @@ package shapelib
 * TYPE_DEFINITIONS *
 *******************/
 
-// Array of pixels. (Max - 1) is the last index that is accessible.
+// Array of pixels. First index represents y, 2nd index represent x.
+// Byte array is compressed so one bit represents one pixel.
 type PixelArray [][]byte
 
 // SubArray that starts at a relative position rather than (0,0)
-// xStart should be on a byte boundary, ie. % 8 == 0.
+// xStartByte should be on a byte boundary, ie. % 8 == 0.
 type PixelSubArray struct {
 	bytes [][]byte
 	xStartByte int
