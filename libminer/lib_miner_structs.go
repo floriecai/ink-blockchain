@@ -1,10 +1,18 @@
 package libminer
 
+import (
+	"math/big"
+)
 // Msgs used by both blockartlib and miner
 
 //////////////////////////Request msgs
 
-// other messages will be a []byte
+type Request struct {
+	Msg []byte
+	Sign []byte
+	R big.Int
+	S big.Int
+}
 
 type DrawRequest struct {
 	Id int
@@ -16,9 +24,6 @@ type DeleteRequest struct {
 	ShapeHash string
 }
 
-type SignedRequest struct {
-	Id []byte
-}
 //////////////////////////Response msgs
 
 type RegisterResponse struct {
