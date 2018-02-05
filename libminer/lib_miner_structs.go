@@ -1,4 +1,4 @@
-package lib_miner_structs
+package libminer
 
 // Msgs used by both blockartlib and miner
 
@@ -21,7 +21,7 @@ type SignedRequest struct {
 }
 //////////////////////////Response msgs
 
-type RegisterResponse {
+type RegisterResponse struct {
 	Id int
 	CanvasXMax uint32
 	CanvasYMax uint32
