@@ -130,7 +130,7 @@ func (a PixelArray)Print() {
 func NewPixelSubArray(xStart int, xEnd int, yStart int, yEnd int) PixelSubArray {
 	// Set up the values for the sub array struct
 	xStartByte := xStart / 8
-	xSizeByte := maxByte(xEnd - xStartByte)
+	xSizeByte := maxByte(xEnd - xStart / 8)
 	ySize := yEnd - yStart + 1
 
 	a := make([][]byte, ySize)

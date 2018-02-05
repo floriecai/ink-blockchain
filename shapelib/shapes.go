@@ -55,20 +55,24 @@ func (p Path)GetSubArray() PixelSubArray {
 		yStart := p.Points[0].Y
 		yStartFillCount := 0
 		yPrev := 0
+		_, firstVertDir := linePointsGen(p.Points[0], p.Points[1])
 
 		for i := 0; i < len(p.Points) - 1; i++ {
-			yPrev = p.Points[i].Y
-
-			if p.Points[i+1].Moved {
-				if prevVertDir == 0 && yPrev == yStart {
-					sub.flipAllRight(p.Points[i].X, yPrev)
+			if i+2 < len(p.Points) && p.Points[i+1].Moved {
+				if yPrev == yStart && ((yStartFillCount % 2) != 1 || prevVertDir == 0) {
+					sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
 				}
 
 				yStartFillCount = 0
 				xStart = p.Points[i+1].X
 				yStart = p.Points[i+1].Y
+				prevVertDir = -2
+				_, firstVertDir = linePointsGen(p.Points[i+1], p.Points[i+2])
+
 				continue
 			}
+
+			yPrev = p.Points[i].Y
 
 			// Get the iterator for pixels along a line between points.
 			nextPoint, vertDir := linePointsGen(p.Points[i], p.Points[i+1])
@@ -90,8 +94,12 @@ func (p Path)GetSubArray() PixelSubArray {
 					// Effin magic.
 					if p.Filled && vertDir != 0 &&
 						(!(x == xStart && y == yStart) ||
-						yStartFillCount % 2 == 1) {
+						yStartFillCount % 2 == 1 || firstVertDir != 0) {
 						sub.flipAllRight(x, y)
+					}
+
+					if yStartFillCount % 2 == 1 {
+						yStartFillCount ++
 					}
 
 					yPrev = y
@@ -99,7 +107,7 @@ func (p Path)GetSubArray() PixelSubArray {
 			}
 		}
 
-		if prevVertDir == 0 && yPrev == yStart {
+		if yPrev == yStart && ((yStartFillCount % 2) != 1 || prevVertDir == 0) {
 			sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
 		}
 	}
