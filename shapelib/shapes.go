@@ -59,7 +59,7 @@ func (p Path)GetSubArray() PixelSubArray {
 		yStartFillCount := 0
 
 		for i := 0; i < len(p.Points) - 1; i++ {
-			if i+2 < len(p.Points) && p.Points[i+1].Moved {
+			if i+1 < len(p.Points) && p.Points[i+1].Moved {
 				if (yStartFillCount % 2 == 1) {
 					sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
 				}
