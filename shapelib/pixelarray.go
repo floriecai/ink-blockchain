@@ -5,7 +5,10 @@ This file contains functions related to PixelArray and PixelSubArray.
 */
 package shapelib
 
-import "fmt"
+import (
+	"fmt"
+	"math/bits"
+)
 
 /************************
 * PIXEL_ARRAY_FUNCTIONS *
@@ -44,8 +47,9 @@ func (a PixelArray)HasConflict(sub PixelSubArray) bool {
 	}
 
 
-	if (sub.yStart + len(sub.bytes[0])) > len(a) {
-		fmt.Println("Sub array is past the y boundary")
+	if (sub.yStart + len(sub.bytes)) > len(a) {
+		fmt.Println("Sub array is past the y boundary:")
+		fmt.Println("yMaxSub, yMax:", sub.yStart + len(sub.bytes[0]), len(a))
 		return true
 	}
 
@@ -79,6 +83,8 @@ func (a *PixelArray)MergeSubArray(sub PixelSubArray) {
 
 
 	if (sub.yStart + len(sub.bytes)) > len(*a) {
+		fmt.Println("Sub array is past the y boundary:")
+		fmt.Println("yMaxSub, yMax:", sub.yStart + len(sub.bytes), len(*a))
 		fmt.Println("Sub array is past the y boundary")
 		return
 	}
@@ -101,7 +107,7 @@ func (a PixelArray)Print() {
 	for y := len(a) - 1; y >= 0; y-- {
 		fmt.Printf("%d\t", y)
 		for x := 0; x < len(a[0]); x++ {
-			fmt.Printf("%b%b%b%b%b%b%b%b ",
+			fmt.Printf("%b%b%b%b%b%b%b%b",
 			(a[y][x]) & 1,
 			(a[y][x] >> 1) & 1,
 			(a[y][x] >> 2) & 1,
@@ -124,7 +130,7 @@ func (a PixelArray)Print() {
 func NewPixelSubArray(xStart int, xEnd int, yStart int, yEnd int) PixelSubArray {
 	// Set up the values for the sub array struct
 	xStartByte := xStart / 8
-	xSizeByte := maxByte(xEnd) - xStartByte
+	xSizeByte := maxByte(xEnd - xStartByte)
 	ySize := yEnd - yStart + 1
 
 	a := make([][]byte, ySize)
@@ -159,15 +165,32 @@ func (a *PixelSubArray)flipAllRight(x, y int) {
 		a.bytes[yRow][xByte] ^= (1 << i)
 	}
 
-	if yRow == 0 {
-		fmt.Println("row 0; xByte, xBit", xByte, xBit)
+	for i := xByte + 1; i < len(a.bytes[0]); i++ {
+		a.bytes[yRow][i] ^= 0xFF
+	}
+}
+
+// Fill in between the two coordinates formed by (xl,y) and (xr,y)
+func (a *PixelSubArray)fillBetween(xl, xr, y int) {
+	yRow := y - a.yStart
+	xByteL := xl/8 - a.xStartByte
+	xByteR := xr/8 - a.xStartByte
+
+	// Fill in the partial bits on left
+	xBit := uint8(xl%8)
+	for i := xBit; i < 8; i++ {
+		a.bytes[yRow][xByteL] |= (1 << i)
 	}
 
-	for i := xByte + 1; i < len(a.bytes[0]); i++ {
-	if yRow == 0 {
-		fmt.Println("Filling all of byte", i)
+	// Fill in the partial bits on right
+	xBit = uint8(xr%8)
+	for i := xBit; i < 255; i-- {
+		a.bytes[yRow][xByteR] |= (1 << i)
 	}
-		a.bytes[yRow][i] ^= 0xFF
+
+	// Fill in bytes in between
+	for i := xByteL + 1; i < xByteR; i++ {
+		a.bytes[yRow][i] |= 0xFF
 	}
 }
 
@@ -189,4 +212,16 @@ func (a PixelSubArray)Print() {
 
 		fmt.Printf("\n")
 	}
+}
+
+// Get the number of pixels filled in the sub array
+func (a PixelSubArray)GetPixelsFilled() int {
+	sum := int(0)
+	for y := len(a.bytes) - 1; y >= 0; y-- {
+		for x := 0; x < len(a.bytes[0]); x++ {
+			sum += bits.OnesCount8(a.bytes[y][x])
+		}
+	}
+
+	return sum
 }

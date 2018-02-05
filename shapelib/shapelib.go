@@ -3,9 +3,12 @@
 This package is intended to be used to verify that shapes are not conflicting
 with each other.
 
+
 Public functions:
 
 	NewPath(points []Point, filled bool) -> Path
+
+	NewCircle(xc, yc, radius int, filled bool) -> Circle
 
 	NewPixelArray(xMax int, yMax int) -> PixelArray
 
@@ -21,29 +24,24 @@ Public types and methods:
 
 	PixelSubArray
 	  Print()
+	  GetPixelsFilled() -> int
 
 	Point
 
 	Path
 	  GetSubArray() -> PixelSubArray
+	  TotalLength() -> int
 
 	Circle
-	  GetSubArray() -> PixelSubArray (NYI)
+	  GetSubArray() -> PixelSubArray
+	  Circumference() -> int
 
-*/
-
-/*
 
 This file in particular contains all type definitions and some misc. functions.
-
-TODO:
- - Circle implementation. Honestly probably easier than Path...
 
 */
 
 package shapelib
-
-import "fmt"
 
 /*******************
 * TYPE_DEFINITIONS *
@@ -131,10 +129,10 @@ func getLineParams(p1, p2 Point) (sT slopeType, slope, intercept float64) {
 	if p1.X == p2.X {
 		// Check for infinite slope.
 		if p2.Y > p1.Y {
-			fmt.Println("INFUP slope")
+			//fmt.Println("INFUP slope")
 			sT = INFUP
 		} else {
-			fmt.Println("INFDOWN slope")
+			//fmt.Println("INFDOWN slope")
 			sT = INFDOWN
 		}
 
@@ -145,18 +143,18 @@ func getLineParams(p1, p2 Point) (sT slopeType, slope, intercept float64) {
 		slope, intercept = getSlopeIntercept(p1, p2)
 		if p1.X < p2.X {
 			if slope >= 0 {
-				fmt.Println("POSRIGHT slope")
+				//fmt.Println("POSRIGHT slope")
 				sT = POSRIGHT
 			} else {
-				fmt.Println("NEGRIGHT slope")
+				//fmt.Println("NEGRIGHT slope")
 				sT = NEGRIGHT
 			}
 		} else {
 			if slope >= 0 {
-				fmt.Println("POSLEFT slope")
+				//fmt.Println("POSLEFT slope")
 				sT = POSLEFT
 			} else {
-				fmt.Println("NEGLEFT slope")
+				//fmt.Println("NEGLEFT slope")
 				sT = NEGLEFT
 			}
 		}
@@ -243,7 +241,6 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 			vertDirection = 0
 		} else {
 			vertDirection = -1
-			fmt.Println("POSLEFT, slope:", slope)
 		}
 
 		yThresh = int(slope * x + intercept + 0.5)
@@ -274,7 +271,6 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 		}, vertDirection
 	case NEGLEFT:
 		vertDirection = 1
-		fmt.Println("NEGLEFT, slope:", slope)
 
 		return func () (int, int) {
 			if y < yThresh {
