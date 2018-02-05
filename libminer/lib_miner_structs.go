@@ -1,4 +1,4 @@
-package lib_miner_structs
+package libminer
 
 // Msgs used by both blockartlib and miner
 

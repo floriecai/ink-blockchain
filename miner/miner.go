@@ -2,7 +2,7 @@ package main
 
 import (
 	"net/rpc"
-	"../lib_miner_structs"
+	"../libminer"
 )
 
 var MinerInstance *Miner
@@ -28,19 +28,19 @@ func (m *Miner) ConnectToServer(){
 | RPC functions
 ********************************/
 
-func (lmi *Lib_Miner_Interface) OpenCanvas(hello *[]byte, response *lib_miner_structs.RegisterResponse) (err error){
+func (lmi *Lib_Miner_Interface) OpenCanvas(hello *[]byte, response *libminer.RegisterResponse) (err error){
 	return nil
 }
 
-func (lmi *Lib_Miner_Interface) GetInk(hello *[]byte, response *lib_miner_structs.InkResponse) (err error) {
+func (lmi *Lib_Miner_Interface) GetInk(hello *[]byte, response *libminer.InkResponse) (err error) {
 	return nil
 }
 
-func (lmi *Lib_Miner_Interface) Draw(req *lib_miner_structs.DrawRequest, response *lib_miner_structs.DrawResponse) (err error) {
+func (lmi *Lib_Miner_Interface) Draw(req *libminer.DrawRequest, response *libminer.DrawResponse) (err error) {
 	return nil
 }
 
-func (lmi *Lib_Miner_Interface) Delete(req *lib_miner_structs.DeleteRequest, response *lib_miner_structs.InkResponse) (err error) {
+func (lmi *Lib_Miner_Interface) Delete(req *libminer.DeleteRequest, response *libminer.InkResponse) (err error) {
 	return nil
 }
 /* TODO
