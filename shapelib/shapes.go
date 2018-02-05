@@ -49,25 +49,24 @@ func (p Path)GetSubArray() PixelSubArray {
 
 	// Fill separately from doing the outline - more accurate
 	if p.Filled {
-		// Initialize some values.
+		// Initialize some values for correct printing
 		prevVertDir := -2
-		xStart := p.Points[0].X
 		yStart := p.Points[0].Y
-		yStartFillCount := 0
 		yPrev := 0
-		_, firstVertDir := linePointsGen(p.Points[0], p.Points[1])
+
+		// Count the number of times yStart is written to.
+		// The fill count must be even at the end.
+		yStartFillCount := 0
 
 		for i := 0; i < len(p.Points) - 1; i++ {
 			if i+2 < len(p.Points) && p.Points[i+1].Moved {
-				if yPrev == yStart && ((yStartFillCount % 2) != 1 || prevVertDir == 0) {
+				if (yStartFillCount % 2 == 1) {
 					sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
 				}
 
 				yStartFillCount = 0
-				xStart = p.Points[i+1].X
 				yStart = p.Points[i+1].Y
 				prevVertDir = -2
-				_, firstVertDir = linePointsGen(p.Points[i+1], p.Points[i+2])
 
 				continue
 			}
@@ -91,15 +90,12 @@ func (p Path)GetSubArray() PixelSubArray {
 			// Fill in the pixels provided by the iterator
 			for x, y := nextPoint(); x != -1; x, y = nextPoint() {
 				if y != yPrev {
-					// Effin magic.
-					if p.Filled && vertDir != 0 &&
-						(!(x == xStart && y == yStart) ||
-						yStartFillCount % 2 == 1 || firstVertDir != 0) {
+					if vertDir != 0 {
 						sub.flipAllRight(x, y)
-					}
 
-					if yStartFillCount % 2 == 1 {
-						yStartFillCount ++
+						if y == yStart {
+							yStartFillCount ++
+						}
 					}
 
 					yPrev = y
@@ -107,7 +103,7 @@ func (p Path)GetSubArray() PixelSubArray {
 			}
 		}
 
-		if yPrev == yStart && ((yStartFillCount % 2) != 1 || prevVertDir == 0) {
+		if (yStartFillCount % 2 == 1) {
 			sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
 		}
 	}

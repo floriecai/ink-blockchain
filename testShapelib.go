@@ -9,7 +9,7 @@ func main() {
 	// RANDOM SHAPE
 	points := make([]shapelib.Point, 10)
 	points[0] = shapelib.Point {0, 60, false }
-	points[1] = shapelib.Point {150, 80, false }
+	points[1] = shapelib.Point {150, 90, false }
 	points[2] = shapelib.Point {160, 299, false }
 	points[3] = shapelib.Point {450, 150, false }
 	points[4] = shapelib.Point {599, 250, false }
@@ -72,7 +72,7 @@ func main() {
 
 	fmt.Println("Pixels filled:", sub1.GetPixelsFilled())
 
-	a := shapelib.NewPixelArray(599, 400)
+	a := shapelib.NewPixelArray(600, 400)
 	a.MergeSubArray(sub1)
 	//fmt.Println("Square circle conflict?", a.HasConflict(sub2))
 	a.Print()
