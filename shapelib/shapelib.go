@@ -76,7 +76,12 @@ type Path struct {
 }
 
 // Point. Represents a point or pixel on a discrete 2D array.
-// All points should be in the 1st quadrant (x >= 0, y >= 0)
+//
+// All points should be in the 1st quadrant (x >= 0, y >= 0).
+//
+// Moved is only relevant for the Path object. Its relevance for Path is thus:
+// if the Point (n) has (Moved == true), then there is no line drawn between
+// Point (n-1) to Point(n).
 type Point struct {
 	X int
 	Y int
