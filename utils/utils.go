@@ -3,7 +3,7 @@ package utils
 import (
 	"crypto/md5"
 	"fmt"
-	"proj1/shapelib"
+	"../shapelib"
 	"strconv"
 	"strings"
 )
@@ -141,10 +141,10 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 }
 
 func SVGToPoints(commands SVGPath, canvasX int, canvasY int, filled bool) (path shapelib.Path) {
-	maxX := -1
-	maxY := -1
-	minX := canvasX + 1
-	minY := canvasY + 1
+	//maxX := -1
+	//maxY := -1
+	//minX := canvasX + 1
+	//minY := canvasY + 1
 
 	var points []shapelib.Point
 
