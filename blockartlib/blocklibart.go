@@ -14,9 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/rpc"
-	"proj1/libminer"
-	"proj1/shapelib"
-	"proj1/utils"
+	"../libminer"
+	"../shapelib"
+	"../utils"
 )
 
 const (

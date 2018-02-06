@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"encoding/hex"
 	"encoding/json"
-	"../blockartlib"
 )
 
 var MinerInstance *Miner
@@ -27,7 +26,7 @@ type Miner struct {
 	CurrJobId int
 	PrivKey ecdsa.PrivateKey
 	PubKey ecdsa.PublicKey
-	Settings blockartlib.MinerNetSettings
+	Settings libminer.MinerNetSettings
 	InkAmt int
 }
 
@@ -60,14 +59,14 @@ func OpenLibMinerConn(ip string) {
 }
 
 func (lmi *Lib_Miner_Interface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error){
-	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		//Generate an id in a basic fashion
-		for i := 0; i< math.MaxInt(32) ;i++ {
+		for i := 0;;i++ {
 			if !ArtNodeList[i] {
 				ArtNodeList[i] = true
 				response.Id = i
-				response.CanvasXMax = MinerInstance.Settings.canvasSettings.CanvasXMax
-				response.CanvasYMax = MinerInstance.Settings.canvasSettings.CanvasYMax
+				response.CanvasXMax = MinerInstance.Settings.CanvasSettings.CanvasXMax
+				response.CanvasYMax = MinerInstance.Settings.CanvasSettings.CanvasYMax
 				break
 			}
 		}
@@ -79,7 +78,7 @@ func (lmi *Lib_Miner_Interface) OpenCanvas(req *libminer.Request, response *libm
 }
 
 func (lmi *Lib_Miner_Interface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
-	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		response.InkRemaining = MinerInstance.InkAmt
 		return nil
 	} else {
@@ -89,7 +88,7 @@ func (lmi *Lib_Miner_Interface) GetInk(req *libminer.Request, response *libminer
 }
 
 func (lmi *Lib_Miner_Interface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
-	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
 	} else {
@@ -99,7 +98,7 @@ func (lmi *Lib_Miner_Interface) Draw(req *libminer.Request, response *libminer.D
 }
 
 func (lmi *Lib_Miner_Interface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
-	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		response.InkRemaining = MinerInstance.InkAmt
 		fmt.Println("deletion is currently unimplemented, sorry!")
 		return nil
@@ -116,7 +115,7 @@ func (lmi *Lib_Miner_Interface) GetBlockChain(hello *libminer.Request, response 
 */
 
 func (lmi *Lib_Miner_Interface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
-	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		*response = MinerInstance.Settings.GenesisBlockHash
 		return nil
 	} else {
