@@ -47,11 +47,12 @@ package shapelib
 * TYPE_DEFINITIONS *
 *******************/
 
-// Array of pixels. (Max - 1) is the last index that is accessible.
+// Array of pixels. First index represents y, 2nd index represent x.
+// Byte array is compressed so one bit represents one pixel.
 type PixelArray [][]byte
 
 // SubArray that starts at a relative position rather than (0,0)
-// xStart should be on a byte boundary, ie. % 8 == 0.
+// xStartByte should be on a byte boundary, ie. % 8 == 0.
 type PixelSubArray struct {
 	bytes [][]byte
 	xStartByte int
@@ -75,7 +76,12 @@ type Path struct {
 }
 
 // Point. Represents a point or pixel on a discrete 2D array.
-// All points should be in the 1st quadrant (x >= 0, y >= 0)
+//
+// All points should be in the 1st quadrant (x >= 0, y >= 0).
+//
+// Moved is only relevant for the Path object. Its relevance for Path is thus:
+// if the Point (n) has (Moved == true), then there is no line drawn between
+// Point (n-1) to Point(n).
 type Point struct {
 	X int
 	Y int

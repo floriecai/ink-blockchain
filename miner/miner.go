@@ -14,6 +14,7 @@ import (
 )
 
 var MinerInstance *Miner
+
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
@@ -26,7 +27,6 @@ type Miner struct {
 }
 
 type Lib_Miner_Interface struct {
-
 }
 
 type Miner_Miner_Interface struct {
@@ -54,7 +54,6 @@ func OpenLibMinerConn(ip string) {
 }
 
 func (lmi *Lib_Miner_Interface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error){
-
 	return nil
 }
 
@@ -69,6 +68,7 @@ func (lmi *Lib_Miner_Interface) Draw(req *libminer.Request, response *libminer.D
 func (lmi *Lib_Miner_Interface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	return nil
 }
+
 /* TODO
 func (lmi *Lib_Miner_Interface) GetBlockChain(hello *libminer.Request, response *[]Block) (err error) {
 	return nil
@@ -83,6 +83,7 @@ func (lmi *Lib_Miner_Interface) GetGenesisBlock(req *libminer.Request, response 
 		return nil
 	}
 }
+
 /*******************************
 | Helpers
 ********************************/
@@ -110,6 +111,8 @@ func main() {
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
+
+	// extract key pairs TODO: verify this is correct
 	var PublicKey ecdsa.PublicKey
 	var PrivateKey ecdsa.PrivateKey
 	json.Unmarshal([]byte(pubKey), &PublicKey)

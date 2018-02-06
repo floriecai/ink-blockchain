@@ -20,7 +20,7 @@ func NewPixelArray(xMax int, yMax int) PixelArray {
 	a := make([][]byte, yMax)
 
 	// Initialize the number of bytes required in each row
-	xSz := maxByte(xMax)
+	xSz := maxByte(xMax + 1)
 
 	for y:= 0; y < yMax; y++ {
 		// create compressed columns (one bit per pixel)
@@ -130,7 +130,7 @@ func (a PixelArray)Print() {
 func NewPixelSubArray(xStart int, xEnd int, yStart int, yEnd int) PixelSubArray {
 	// Set up the values for the sub array struct
 	xStartByte := xStart / 8
-	xSizeByte := maxByte(xEnd - xStartByte)
+	xSizeByte := maxByte(xEnd + 1) - xStartByte
 	ySize := yEnd - yStart + 1
 
 	a := make([][]byte, ySize)

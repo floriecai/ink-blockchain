@@ -9,12 +9,20 @@ package blockartlib
 
 import (
 	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/md5"
+	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
+	"net/rpc"
+	"proj1/libminer"
+	"proj1/shapelib"
+	"proj1/utils"
 )
 
-const MAX_SVG_LEN = 128
+const (
+	MAX_SVG_LEN = 128
+	TRANSPARENT = "transparent"
+)
 
 // Represents a type of shape in the BlockArt system.
 type ShapeType int
@@ -189,105 +197,232 @@ type Canvas interface {
 	CloseCanvas() (inkRemaining uint32, err error)
 }
 
-type SVGCommand interface {
-	isExpr()
+type CanvasT struct {
+	Id       int
+	Settings CanvasSettings
+	Miner    *rpc.Client
+	PrivKey  ecdsa.PrivateKey
 }
 
-type MCommand struct {
-	IsRelative bool
-	X          int
-	Y          int
-}
+// Adds a new shape to the canvas.
+// Can return the following errors:
+// - DisconnectedError
+// - InsufficientInkError
+// - InvalidShapeSvgStringError
+// - ShapeSvgStringTooLongError
+// - ShapeOverlapError
+// - OutOfBoundsError
+func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgString string, fill string, stroke string) (shapeHash string, blockHash string, inkRemaining uint32, err error) {
+	path, err := utils.GetParsedSVG(shapeSvgString)
 
-func (c MCommand) isExpr() {}
-
-type LCommand struct {
-	IsRelative bool
-	X          int
-	Y          int
-}
-
-func (c LCommand) isExpr() {}
-
-type HCommand struct {
-	IsRelative bool
-	Y          int
-}
-
-func (c HCommand) isExpr() {}
-
-type VCommand struct {
-	IsRelative bool
-	X          int
-}
-
-func (c VCommand) isExpr() {}
-
-type ZCommand struct{}
-
-func (c ZCommand) isExpr() {}
-
-type SVGPath []SVGCommand
-
-// Parses a string into a list of SVGCommands
-// Returns an ordered list of SVGCommands that denote an SVGPath
-// Possible Errors: InvalidShapeSvgStringError
-func getParsedSVG(svgString string) (svgPath SVGPath, err error) {
-	if len(svgString) > MAX_SVG_LEN {
-		return svgPath, InvalidShapeSvgStringError(svgString)
+	if err != nil {
+		return "", "", 0, err
 	}
 
-	tokens := strings.Split(svgString, " ")
-	tokenLen := len(tokens)
-	i := 0
-	for i < tokenLen {
-		var svgCommand SVGCommand
-		tokenUpper := strings.ToUpper(tokens[i])
-		token := tokens[i]
+	shapelibPath := utils.SVGToPoints(path, canvas.Settings.CanvasXMax, canvas.Settings.CanvasYMax, fill != TRANSPARENT)
 
-		var param1, param2 int
-		if tokenUpper == "L" || tokenUpper == "M" {
-			if i+2 < tokenLen {
-				param1, err = strconv.Atoi(tokens[i+1])
-				if err != nil {
-					return svgPath, InvalidShapeSvgStringError(svgString)
-				}
-				param2, err = strconv.Atoi(tokens[i+2])
-				if err != nil {
-					return svgPath, InvalidShapeSvgStringError(svgString)
-				}
-			}
+	drawRequest := libminer.DrawRequest{Id: canvas.Id, ValidateNum: validateNum, SVG: shapelibPath}
+	drawRequestData, err := json.Marshal(drawRequest)
+	
+	if err != nil {
+		fmt.Println("Issue marshalling shapelib path in ADDSHAPE: %s")
+	}
+	
+	hashedMsg := md5.New(drawRequestData)
+	r, s, err := ecdsa.Sign(rand.Reader, canvas.PrivKey, hashedMsg)
 
-			if tokenUpper == "L" {
-				svgCommand = LCommand{X: param1, IsRelative: token == "l"}
-			} else {
-				svgCommand = MCommand{X: param1, Y: param2, IsRelative: token == "m"}
-			}
-			i += 3
-		} else if tokenUpper == "V" || tokenUpper == "H" {
-			if i+1 < tokenLen {
-				param1, err = strconv.Atoi(tokens[i+1])
-				if err != nil {
-					return svgPath, InvalidShapeSvgStringError(svgString)
-				}
-			}
-
-			if token == "V" {
-				svgCommand = VCommand{X: param1, IsRelative: token == "v"}
-			} else {
-				svgCommand = HCommand{Y: param1, IsRelative: token == "h"}
-			}
-			svgPath = append(svgPath, svgCommand)
-			i += 2
-		} else if tokenUpper == "Z" {
-			svgPath = append(svgPath, ZCommand{})
-			i++
-		} else {
-			return svgPath, err
-		}
+	if err != nil {
+		fmt.Println("Could not sign AddShape request")
 	}
 
-	return svgPath, nil
+	req := libminer.Request(R: r, S: s, HashedMsg: hashedMsg, Msg: drawRequestData)
+	var reply libminer.DrawResponse
+
+	err := canvas.Miner.Call("Miner.Draw", &req, &reply)
+	
+	if err != nil {
+		fmt.Println("Error on calling Miner.Draw")
+		return "", "", 0, err
+	}
+
+	return reply.ShapeHash, reply.BlockHash, reply.InkRemaining, err
+}
+
+// aDD SHAPE blocks until number of blocks (validateNum) follow current block
+// Returns the encoding of the shape as an svg string.
+// Can return the following errors:
+// - DisconnectedError
+// - InvalidShapeHashError
+func (canvas CanvasT) GetSvgString(shapeHash string) (svgString string, err error) {
+	if canvas.Miner == nil {
+		return "", DisconnectedError(canvas.Id)
+	}
+
+	args := libminer.SVGStringRequest{Id: canvas.Id, ShapeHash: shapeHash}
+	req := libminer.GenericRequest{Id: canvas.Id}
+	var resp libminer.
+	err := canvas.Miner.Call("Miner.GetBlockChain", &req, &resp)
+	
+	if err != nil {
+		checkError(err)
+		return "", err
+	}
+
+	// TODO fcai 
+	// for i, block := range resp.Blocks {
+	// 	for j, ops := range block.Ops {
+	// 		if ops.Hash == shapeHash {
+	// 			return ops.svgString, nil
+	// 		}
+	// 	}
+	// }
+
+	return "", InvalidShapeHashError(shapeHash)
+}
+
+// Returns the amount of ink currently available.
+// Can return the following errors:
+// - DisconnectedError
+func (canvas CanvasT) GetInk() (inkRemaining uint32, err error) {
+	if canvas.Miner == nil {
+		return "", DisconnectedError(canvas.Id)
+	}
+
+	req := libminer.GenericRequest{Id: canvas.Id}
+	var resp libminer.InkResponse
+
+	err := canvas.Miner.Call("Miner.GetInk", &req, &resp)
+	
+	if err != nil {
+		checkError(err)
+		return 0, err
+	}
+
+	return resp.InkRemaining, err
+}
+
+// Removes a shape from the canvas.
+// Can return the following errors:
+// - DisconnectedError
+// - ShapeOwnerError
+func (canvas CanvasT) DeleteShape(validateNum uint8, shapeHash string) (inkRemaining uint32, err error) {
+	if canvas.Miner == nil {
+		return "", DisconnectedError(string(canvas.Id))
+	}
+
+	deleteArgs := libminer.DeleteRequest{Id: canvas.Id, ShapeHash: shapeHash, ValidateNum: validateNum}
+	deleteRequestMsg, err := json.Marshal(deleteArgs)
+
+	if err != nil {
+		log.Println("Error marshalling DeleteShape data")
+		checkError(err)
+		return 0, err
+	}
+
+	hashedMsg := utils.ComputeHash(argsData)
+	r,s, _ := ecdsa.Sign(rand.Reader, canvas.PrivKey, hashedArgs)
+	req := libminer.Request{R: r, S: s, HashedMsg: hashedMsg, Msg: deleteRequestMsg}
+	var resp libminer.InkResponse
+	
+	err := canvas.Miner.Call("Miner.Delete", &req, &resp)
+	
+	if err != nil {
+		log.Println("Error in Miner.Delete")
+		checkError(err)
+		return 0, err
+	}
+	
+	return resp.InkRemaining, err
+}
+
+// Retrieves hashes contained by a specific block.
+// Can return the following errors:
+// - DisconnectedError
+// - InvalidBlockHashError
+func (canvas CanvasT) GetShapes(blockHash string) (shapeHashes []string, err error) {
+	if canvas.Miner == nil {
+		return shapeHashes, DisconnectedError(string(canvas.Id))
+	}
+
+	req := libminer.GenericRequest{Id: canvas.Id}
+	var	resp libminer.BlocksResponse
+	
+	err := canvas.Miner.Call("Miner.GetBlockChain", &req, &resp)
+	
+	if err != nil {
+		log.Println("Error in Miner.GetBlockChain in GetShapes")
+		checkError(err)
+		return shapeHashes, err
+	}
+
+	// TODO fcai
+	// for i, block := resp.Blocks {
+	// 	if block.Hash == blockHash {
+	// 		return block.Ops, nil
+	// 	}
+	// }
+
+	return shapeHashes, InvalidBlockHashError(blockHash)
+}
+
+// Returns the block hash of the genesis block.
+// Can return the following errors:
+// - DisconnectedError
+func (canvas CanvasT) GetGenesisBlock() (blockHash string, err error) {
+	if canvas.Miner == nil {
+		return "", DisconnectedError(string(canvas.Id))
+	}
+	
+	req := libminer.GenericRequest{Id: canvas.Id}
+	var resp libminer.BlocksResponse
+
+	err := canvas.Miner.Call("Miner.GetGenesisBlock", &req, &resp)
+	if err != nil {
+		checkError(err)
+		return "", err
+	}
+
+	// TODO fcai, get blockhash from resp
+	// return resp.Block[0].Hash, nil
+	return "", err
+}
+
+// Retrieves the children blocks of the block identified by blockHash.
+// Can return the following errors:
+// - DisconnectedError
+// - InvalidBlockHashError
+func (canvas CanvasT) GetChildren(blockHash string) (blockHashes []string, err error) {
+	if canvas.Miner == nil {
+		return "", DisconnectedError(string(canvas.Id))
+	}
+
+	req := libminer.GenericRequest{Id: canvas.Id}
+	var resp libminer.BlocksResponse
+
+	err := canvas.Miner.Call("Miner.GetBlockChain", &req, resp)
+	
+	// TODO fcai - get the children of the blockchain
+	// for i, block := range resp.Blocks {
+	// 	if block.Hash == blockHash {
+	// 		// TODO get the children
+	// 	}
+	// }
+
+	return blockHashes, err
+}
+
+// Closes the canvas/connection to the BlockArt network.
+// - DisconnectedError
+func (canvas CanvasT) CloseCanvas() (inkRemaining uint32, err error) {
+	if canvas.Miner == nil {
+		return 0, DisconnectedError(string(canvas.Id))
+	}
+
+	req := libminer.GenericRequest{Id: canvas.Id}
+	var resp libminer.InkResponse
+
+	canvas.Miner.Call("Miner.GetInk", &req, &resp)
+	return inkRemaining, err
 }
 
 // The constructor for a new Canvas object instance. Takes the miner's
@@ -301,7 +436,42 @@ func getParsedSVG(svgString string) (svgPath SVGPath, err error) {
 // Can return the following errors:
 // - DisconnectedError
 func OpenCanvas(minerAddr string, privKey ecdsa.PrivateKey) (canvas Canvas, setting CanvasSettings, err error) {
-	// TODO
-	// For now return DisconnectedError
-	return nil, CanvasSettings{}, DisconnectedError("")
+	var canvasT CanvasT
+	miner, err := rpc.Dial("tcp", minerAddr)
+
+	if err != nil {
+		return canvasT, CanvasSettings{}, DisconnectedError(minerAddr)
+	}
+
+	msg := []byte("Hi")
+	r, s, err := ecdsa.Sign(rand.Reader, &privKey, msg)
+
+	if err != nil {
+		return canvas, setting, err
+	}
+
+	args := &libminer.RegisterRequest{R: *r, S: *s, Msg: msg}
+	var resp libminer.RegisterResponse
+
+	err = miner.Call("Miner.RegisterRequest", args, resp)
+
+	if err != nil {
+		return canvas, setting, err
+	}
+
+	canvasT.Miner = miner
+	canvasT.Id = resp.Id
+	canvasT.PrivKey = privKey
+	setting = CanvasSettings{CanvasXMax: resp.CanvasXMax, CanvasYMax: resp.CanvasYMax}
+
+	return canvasT, setting, nil
+}
+
+
+func checkError(err error) error {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error ", err.Error())
+		return err
+	}
+	return nil
 }
