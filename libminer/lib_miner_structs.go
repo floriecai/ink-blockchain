@@ -2,32 +2,45 @@ package libminer
 
 import (
 	"math/big"
+	"proj1/shapelib"
 )
+
 // Msgs used by both blockartlib and miner
 
 //////////////////////////Request msgs
 
 type Request struct {
-	Msg []byte
-	Sign []byte
-	R big.Int
-	S big.Int
+	Msg       []byte
+	HashedMsg []byte
+	R         big.Int
+	S         big.Int
 }
 
 type DrawRequest struct {
-	Id int
-	SVG string
+	Id          int
+	ValidateNum uint8
+	SVG         shapelib.Path
 }
 
 type DeleteRequest struct {
+	Id          int
+	ValidateNum int
+	ShapeHash   string
+}
+
+type GenericRequest struct {
 	Id int
-	ShapeHash string
+}
+
+type RegisterRequest struct {
+	R   big.Int
+	S   big.Int
+	Msg []byte
 }
 
 //////////////////////////Response msgs
-
 type RegisterResponse struct {
-	Id int
+	Id         int
 	CanvasXMax uint32
 	CanvasYMax uint32
 	//GenesisBlockHash string
@@ -38,8 +51,8 @@ type InkResponse struct {
 }
 
 type DrawResponse struct {
-	ShapeHash string
-	BlockHash string
+	ShapeHash    string
+	BlockHash    string
 	InkRemaining int
 }
 

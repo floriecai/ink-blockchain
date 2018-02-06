@@ -2,25 +2,26 @@ package main
 
 import (
 	"net/rpc"
+
 	"../libminer"
 )
 
 var MinerInstance *Miner
+
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
 ********************************/
 type Miner struct {
-
 }
 
 type Lib_Miner_Interface struct {
-
 }
+
 /*******************************
 | Miner functions
 ********************************/
-func (m *Miner) ConnectToServer(){
+func (m *Miner) ConnectToServer() {
 
 }
 
@@ -28,7 +29,7 @@ func (m *Miner) ConnectToServer(){
 | RPC functions
 ********************************/
 
-func (lmi *Lib_Miner_Interface) OpenCanvas(hello *[]byte, response *libminer.RegisterResponse) (err error){
+func (lmi *Lib_Miner_Interface) OpenCanvas(hello *libminer.RegisterRequest, response *libminer.RegisterResponse) (err error) {
 	return nil
 }
 
@@ -43,6 +44,7 @@ func (lmi *Lib_Miner_Interface) Draw(req *libminer.DrawRequest, response *libmin
 func (lmi *Lib_Miner_Interface) Delete(req *libminer.DeleteRequest, response *libminer.InkResponse) (err error) {
 	return nil
 }
+
 /* TODO
 func (lmi *Lib_Miner_Interface) GetBlockChain(hello *[]byte, response *[]Block) (err error) {
 	return nil
@@ -52,6 +54,7 @@ func (lmi *Lib_Miner_Interface) GetBlockChain(hello *[]byte, response *[]Block) 
 func (lmi *Lib_Miner_Interface) GetGenesisBlock(hello *[]byte, response *string) (err error) {
 	return nil
 }
+
 /*******************************
 | Helpers
 ********************************/
