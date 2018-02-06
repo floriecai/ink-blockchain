@@ -11,9 +11,13 @@ import (
 	"math/big"
 	"encoding/hex"
 	"encoding/json"
+	"../blockartlib"
 )
 
 var MinerInstance *Miner
+
+//Primitive representation of active art miners
+var ArtNodeList map[int]bool = make(map[int]bool)
 
 /*******************************
 | Structs for the miners to use internally
@@ -23,7 +27,8 @@ type Miner struct {
 	CurrJobId int
 	PrivKey ecdsa.PrivateKey
 	PubKey ecdsa.PublicKey
-	GenesisHash string
+	Settings blockartlib.MinerNetSettings
+	InkAmt int
 }
 
 type Lib_Miner_Interface struct {
@@ -32,6 +37,7 @@ type Lib_Miner_Interface struct {
 type Miner_Miner_Interface struct {
 
 }
+
 /*******************************
 | Miner functions
 ********************************/
@@ -54,19 +60,53 @@ func OpenLibMinerConn(ip string) {
 }
 
 func (lmi *Lib_Miner_Interface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error){
-	return nil
+	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+		//Generate an id in a basic fashion
+		for i := 0; i< math.MaxInt(32) ;i++ {
+			if !ArtNodeList[i] {
+				ArtNodeList[i] = true
+				response.Id = i
+				response.CanvasXMax = MinerInstance.Settings.canvasSettings.CanvasXMax
+				response.CanvasYMax = MinerInstance.Settings.canvasSettings.CanvasYMax
+				break
+			}
+		}
+		return nil
+	} else {
+		err = fmt.Errorf("invalid user")
+		return err
+	}
 }
 
 func (lmi *Lib_Miner_Interface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
-	return nil
+	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+		response.InkRemaining = MinerInstance.InkAmt
+		return nil
+	} else {
+		err = fmt.Errorf("invalid user")
+		return err
+	}
 }
 
 func (lmi *Lib_Miner_Interface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
-	return nil
+	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+		fmt.Println("drawing is currently unimplemented, sorry!")
+		return nil
+	} else {
+		err = fmt.Errorf("invalid user")
+		return err
+	}
 }
 
 func (lmi *Lib_Miner_Interface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
-	return nil
+	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
+		response.InkRemaining = MinerInstance.InkAmt
+		fmt.Println("deletion is currently unimplemented, sorry!")
+		return nil
+	} else {
+		err = fmt.Errorf("invalid user")
+		return err
+	}
 }
 
 /* TODO
@@ -77,10 +117,11 @@ func (lmi *Lib_Miner_Interface) GetBlockChain(hello *libminer.Request, response 
 
 func (lmi *Lib_Miner_Interface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
 	if Verify(req.Msg, req.Sign, req.R, req.S, MinerInstance.PrivKey) {
-		*response = MinerInstance.GenesisHash
+		*response = MinerInstance.Settings.GenesisBlockHash
 		return nil
 	} else {
-		return nil
+		err = fmt.Errorf("invalid user")
+		return err
 	}
 }
 
