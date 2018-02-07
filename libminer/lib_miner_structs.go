@@ -2,6 +2,7 @@ package libminer
 
 import (
 	"math/big"
+
 	"../shapelib"
 )
 
@@ -19,12 +20,12 @@ type Request struct {
 type DrawRequest struct {
 	Id          int
 	ValidateNum uint8
-	SVG         shapelib.Path
+	SVG         []shapelib.Path
 }
 
 type DeleteRequest struct {
 	Id          int
-	ValidateNum int
+	ValidateNum uint8
 	ShapeHash   string
 }
 
@@ -47,13 +48,13 @@ type RegisterResponse struct {
 }
 
 type InkResponse struct {
-	InkRemaining int
+	InkRemaining uint32
 }
 
 type DrawResponse struct {
 	ShapeHash    string
 	BlockHash    string
-	InkRemaining int
+	InkRemaining uint32
 }
 
 type BlocksResponse struct {
@@ -61,8 +62,7 @@ type BlocksResponse struct {
 	//TODO: Block struct to be completed
 }
 
-////////////////////////Settings 
-
+////////////////////////Settings
 
 // Settings for a canvas in BlockArt.
 type CanvasSettings struct {
