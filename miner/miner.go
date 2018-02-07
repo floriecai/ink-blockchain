@@ -10,10 +10,9 @@ import (
 	"math/big"
 	"net"
 	"net/rpc"
-	"time"
 	"os"
 	"../libminer"
-	"../minerserverlib"
+	"../minerserver"
 )
 
 var MinerInstance *Miner
@@ -27,9 +26,12 @@ var ArtNodeList map[int]bool = make(map[int]bool)
 ********************************/
 type Miner struct {
 	CurrJobId int
-	PrivKey ecdsa.PrivateKey
-	Settings libminer.MinerNetSettings
+	PrivKey *ecdsa.PrivateKey
+	Settings minerserver.MinerNetSettings
 	InkAmt int
+	LMI *LibMinerInterface
+	MMI *MinerMinerInterface
+	MSI *MinerServerInterface
 }
 
 type MinerInfo struct {
@@ -52,14 +54,21 @@ type MinerServerInterface struct {
 /*******************************
 | Miner functions
 ********************************/
-func (m *Miner) ConnectToServer(ip string) *net.TCPConn {
+func (m *Miner) ConnectToServer(ip string) {
+	miner_server_int := new(MinerServerInterface)
+
 	LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
-	CheckError(err)
+	CheckError(err, "ConnectToServer:ResolveLocalAddr")
+
 	ServerAddr, err := net.ResolveTCPAddr("tcp", ip)
-	CheckError(err)
-	Conn, err := net.DialTCP("tcp", LocalAddr, ServerAddr)
-	CheckError(err)
-	return Conn
+	CheckError(err, "ConnectToServer:ResolveServerAddr")
+
+	conn, err := net.DialTCP("tcp", LocalAddr, ServerAddr)
+	CheckError(err, "ConnectToServer:DialTCP")
+
+	client := rpc.NewClient(conn)
+	miner_server_int.Client = client
+	MinerInstance.MSI = miner_server_int
 }
 
 /*******************************
@@ -69,10 +78,15 @@ func (m *Miner) ConnectToServer(ip string) *net.TCPConn {
 //Setup an interface that implements rpc calls for the lib
 func OpenLibMinerConn(ip string) {
 	lib_miner_int := new(LibMinerInterface)
+
 	server := rpc.NewServer()
 	server.Register(lib_miner_int)
+
 	tcp, err := net.Listen("tcp", ip)
-	CheckError(err)
+	CheckError(err, "OpenLibMinerConn:Listen")
+
+	MinerInstance.LMI = lib_miner_int
+
 	server.Accept(tcp)
 }
 
@@ -144,18 +158,18 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 
 // Server
 
-func (msi *MinerServerInterface) Register(m MinerInfo, r *MinerNetSettings) {
-	reqArgs := libminer.MinerInfo{Address: m., Key: }
-	var resp libMiner.MinerNetSettings
+func (msi *MinerServerInterface) Register(m MinerInfo, r *minerserver.MinerNetSettings) {
+	reqArgs := minerserver.MinerInfo{Address: m.Address, Key: MinerInstance.PrivKey.PublicKey}
+	var resp minerserver.MinerNetSettings
 	err := msi.Client.Call("RServer.Register", &reqArgs, &resp)
-	CheckError(err)
-	return nil
+	CheckError(err, "Register:Client.Call")
+	MinerInstance.Settings = resp
 }
 
 /*******************************
 | Helpers
 ********************************/
-func Verify(msg []byte, sign []byte, R, S big.Int, privKey ecdsa.PrivateKey) bool{
+func Verify(msg []byte, sign []byte, R, S big.Int, privKey *ecdsa.PrivateKey) bool{
 	h := md5.New()
 	h.Write(msg)
 	hash := hex.EncodeToString(h.Sum(nil))
@@ -173,20 +187,26 @@ func CheckError(err error, parent string) {
 }
 
 func ExtractKeyPairs(pubKey, privKey string){
-	var PublicKey ecdsa.PublicKey
-	var PrivateKey ecdsa.PrivateKey
+	var PublicKey *ecdsa.PublicKey
+	var PrivateKey *ecdsa.PrivateKey
 
 	pubKeyBytesRestored, _ := hex.DecodeString(pubKey)
 	privKeyBytesRestored, _ := hex.DecodeString(privKey)
 
-	PublicKey, _ := x509.ParsePKIXPublicKey(pubKeyBytesRestored)
-	PrivateKey, _ := x509.ParseECPrivateKey(privKeyBytesRestored)
+	pub, err := x509.ParsePKIXPublicKey(pubKeyBytesRestored)
+	CheckError(err, "ExtractKeyPairs:ParsePKIXPublicKey")
+	PublicKey = pub.(*ecdsa.PublicKey)
 
-	if PublicKey == PrivateKey.PublicKey {
+	PrivateKey, err = x509.ParseECPrivateKey(privKeyBytesRestored)
+	CheckError(err, "ExtractKeyPairs:ParseECPrivateKey")
+
+	r, s, _ := ecdsa.Sign(rand.Reader, PrivateKey, []byte("data"))
+
+	if !ecdsa.Verify(PublicKey, []byte("data"), r, s) {
+		fmt.Println("ExtractKeyPairs:: Key pair incorrect, please recheck")
+	}
 		MinerInstance.PrivKey = PrivateKey
 		fmt.Println("ExtractKeyPairs:: Key pair verified")
-	}
-	fmt.Println("ExtractKeyPairs:: Key pair incorrect, please recheck")
 }
 
 /*******************************
@@ -201,10 +221,12 @@ func main() {
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 
+	// Connect to Server
+	MinerInstance.ConnectToServer(serverIP)
+
+
 	// TODO: Get MinerNetSettings from server
 
-	ServerConn := MinerInstance.ConnectToServer(serverIP)
-	defer ServerConn.Close()
 
 	// 2. Setup Miner-Miner Listener
 
