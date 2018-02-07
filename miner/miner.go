@@ -1,16 +1,18 @@
 package main
 
 import (
-	"fmt"
-	"net"
-	"net/rpc"
-	"../libminer"
-	"os"
 	"crypto/ecdsa"
 	"crypto/md5"
-	"math/big"
+	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
+	"fmt"
+	"math/big"
+	"net"
+	"net/rpc"
+	"time"
+	"os"
+	"../libminer"
+	"../minerserverlib"
 )
 
 var MinerInstance *Miner
@@ -30,18 +32,34 @@ type Miner struct {
 	InkAmt int
 }
 
-type Lib_Miner_Interface struct {
+type MinerInfo struct {
+	Address net.Addr
+	Key ecdsa.PublicKey
+}
+
+type LibMinerInterface struct {
+
 }
 
 type Miner_Miner_Interface struct {
 
 }
 
+type MinerServerInterface struct {
+	Client *rpc.Client
+}
+
 /*******************************
 | Miner functions
 ********************************/
-func (m *Miner) ConnectToServer(ip string){
-
+func (m *Miner) ConnectToServer(ip string) *net.TCPConn {
+	LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
+	CheckError(err)
+	ServerAddr, err := net.ResolveTCPAddr("tcp", ip)
+	CheckError(err)
+	Conn, err := net.DialTCP("tcp", LocalAddr, ServerAddr)
+	CheckError(err)
+	return Conn
 }
 
 /*******************************
@@ -50,7 +68,7 @@ func (m *Miner) ConnectToServer(ip string){
 
 //Setup an interface that implements rpc calls for the lib
 func OpenLibMinerConn(ip string) {
-	lib_miner_int := new(Lib_Miner_Interface)
+	lib_miner_int := new(LibMinerInterface)
 	server := rpc.NewServer()
 	server.Register(lib_miner_int)
 	tcp, err := net.Listen("tcp", ip)
@@ -58,7 +76,7 @@ func OpenLibMinerConn(ip string) {
 	server.Accept(tcp)
 }
 
-func (lmi *Lib_Miner_Interface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error){
+func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error){
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		//Generate an id in a basic fashion
 		for i := 0;;i++ {
@@ -77,7 +95,7 @@ func (lmi *Lib_Miner_Interface) OpenCanvas(req *libminer.Request, response *libm
 	}
 }
 
-func (lmi *Lib_Miner_Interface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
+func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		response.InkRemaining = MinerInstance.InkAmt
 		return nil
@@ -87,7 +105,7 @@ func (lmi *Lib_Miner_Interface) GetInk(req *libminer.Request, response *libminer
 	}
 }
 
-func (lmi *Lib_Miner_Interface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
+func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
@@ -97,7 +115,7 @@ func (lmi *Lib_Miner_Interface) Draw(req *libminer.Request, response *libminer.D
 	}
 }
 
-func (lmi *Lib_Miner_Interface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
+func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		response.InkRemaining = MinerInstance.InkAmt
 		fmt.Println("deletion is currently unimplemented, sorry!")
@@ -114,7 +132,7 @@ func (lmi *Lib_Miner_Interface) GetBlockChain(hello *libminer.Request, response 
 }
 */
 
-func (lmi *Lib_Miner_Interface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
+func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		*response = MinerInstance.Settings.GenesisBlockHash
 		return nil
@@ -122,6 +140,16 @@ func (lmi *Lib_Miner_Interface) GetGenesisBlock(req *libminer.Request, response 
 		err = fmt.Errorf("invalid user")
 		return err
 	}
+}
+
+// Server
+
+func (msi *MinerServerInterface) Register(m MinerInfo, r *MinerNetSettings) {
+	reqArgs := libminer.MinerInfo{Address: m., Key: }
+	var resp libMiner.MinerNetSettings
+	err := msi.Client.Call("RServer.Register", &reqArgs, &resp)
+	CheckError(err)
+	return nil
 }
 
 /*******************************
@@ -147,24 +175,30 @@ func CheckError(err error) {
 | Main
 ********************************/
 func main() {
-	server_ip, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
+	serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
 
-	// extract key pairs TODO: verify this is correct
+	// Extract key pairs
 	var PublicKey ecdsa.PublicKey
 	var PrivateKey ecdsa.PrivateKey
-	json.Unmarshal([]byte(pubKey), &PublicKey)
-	json.Unmarshal([]byte(privKey), &PrivateKey)
+	pubKeyBytesRestored, _ := hex.DecodeString(pubKey)
+	PublicKey, _ := x509.ParsePKIXPublicKey(pubKeyBytesRestored)
+	privKeyBytesRestored, _ := hex.DecodeString(privKey)
+	PrivateKey, _ := x509.ParseECPrivateKey(privKeyBytesRestored)
 	MinerInstance.PubKey = PublicKey
 	MinerInstance.PrivKey = PrivateKey
 
-	MinerInstance.ConnectToServer(server_ip)
+	// TODO: Get MinerNetSettings from server
+
+	ServerConn := MinerInstance.ConnectToServer(serverIP)
+	defer ServerConn.Close()
 
 	// 2. Setup Miner-Miner Listener
 
 	// 3. Setup Miner Heartbeat Manager
+	// Change interval to 1000ms from 10ms
 
 	// 4. Setup Problem Solving
 

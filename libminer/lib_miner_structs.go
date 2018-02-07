@@ -56,13 +56,18 @@ type DrawResponse struct {
 	InkRemaining int
 }
 
+type Block struct {
+	PrevHash    string
+	ReqRecord   Request[]
+	MinerPubKey ecdsa.PublicKey
+	nonce       uint32
+}
+
 type BlocksResponse struct {
-	//blocks []Block
-	//TODO: Block struct to be completed
+	Blocks []Block
 }
 
 ////////////////////////Settings 
-
 
 // Settings for a canvas in BlockArt.
 type CanvasSettings struct {
