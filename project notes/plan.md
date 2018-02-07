@@ -6,18 +6,18 @@ Purpose: to lay out our objectives for completing the project
 
 ## Miner
 
-- [ ] Miner Connection to Server
+- [x] Miner Connection to Server
 - [ ] Miner completes crypto puzzles
 - [ ] Miner creates a block chain of noops starting from genesis block
 - [ ] Miner sends the longest chain to other miners
-- [ ] Miner accepts rpc calls **To be determined** from art nodes
+- [x] Miner accepts rpc calls from art nodes
 - [ ] Miner can perform art transactions
 - [ ] Miner creates a block chain of noops and art transactions
 - [ ] Miner validates art transactions with other miners
 
 ## Artlib
 
-- [ ] Artlib connects to miner
+- [x] Artlib connects to miner
 - [ ] OpenCanvas(minerAddress, private/public Keys) -> canvas, settings, err
 - [ ] canvas.CloseCanvas() -> inkRemaining, err
 - [ ] canvas.AddShape(validateNum, shapeType, shapeSvgString, fill, stroke) -> shapeHash, blockHash, inkRemaining, err 

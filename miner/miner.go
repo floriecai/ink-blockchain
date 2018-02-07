@@ -156,7 +156,9 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 	}
 }
 
-// Server
+/*******************************
+| Server Management functions
+********************************/
 
 func (msi *MinerServerInterface) Register(m MinerInfo, r *minerserver.MinerNetSettings) {
 	reqArgs := minerserver.MinerInfo{Address: m.Address, Key: MinerInstance.PrivKey.PublicKey}
