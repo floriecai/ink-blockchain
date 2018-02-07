@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/md5"
 	"crypto/x509"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -27,7 +28,6 @@ var ArtNodeList map[int]bool = make(map[int]bool)
 type Miner struct {
 	CurrJobId int
 	PrivKey ecdsa.PrivateKey
-	PubKey ecdsa.PublicKey
 	Settings libminer.MinerNetSettings
 	InkAmt int
 }
@@ -41,7 +41,7 @@ type LibMinerInterface struct {
 
 }
 
-type Miner_Miner_Interface struct {
+type MinerMinerInterface struct {
 
 }
 
@@ -166,11 +166,29 @@ func Verify(msg []byte, sign []byte, R, S big.Int, privKey ecdsa.PrivateKey) boo
 		return false
 	}
 }
-func CheckError(err error) {
+func CheckError(err error, parent string) {
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(parent, ":: found error! ",err)
 	}
 }
+
+func ExtractKeyPairs(pubKey, privKey string){
+	var PublicKey ecdsa.PublicKey
+	var PrivateKey ecdsa.PrivateKey
+
+	pubKeyBytesRestored, _ := hex.DecodeString(pubKey)
+	privKeyBytesRestored, _ := hex.DecodeString(privKey)
+
+	PublicKey, _ := x509.ParsePKIXPublicKey(pubKeyBytesRestored)
+	PrivateKey, _ := x509.ParseECPrivateKey(privKeyBytesRestored)
+
+	if PublicKey == PrivateKey.PublicKey {
+		MinerInstance.PrivKey = PrivateKey
+		fmt.Println("ExtractKeyPairs:: Key pair verified")
+	}
+	fmt.Println("ExtractKeyPairs:: Key pair incorrect, please recheck")
+}
+
 /*******************************
 | Main
 ********************************/
@@ -181,14 +199,7 @@ func main() {
 	MinerInstance = new(Miner)
 
 	// Extract key pairs
-	var PublicKey ecdsa.PublicKey
-	var PrivateKey ecdsa.PrivateKey
-	pubKeyBytesRestored, _ := hex.DecodeString(pubKey)
-	PublicKey, _ := x509.ParsePKIXPublicKey(pubKeyBytesRestored)
-	privKeyBytesRestored, _ := hex.DecodeString(privKey)
-	PrivateKey, _ := x509.ParseECPrivateKey(privKeyBytesRestored)
-	MinerInstance.PubKey = PublicKey
-	MinerInstance.PrivKey = PrivateKey
+	ExtractKeyPairs(pubKey, privKey)
 
 	// TODO: Get MinerNetSettings from server
 
