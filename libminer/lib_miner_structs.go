@@ -2,6 +2,7 @@ package libminer
 
 import (
 	"math/big"
+
 	"../shapelib"
 	"crypto/ecdsa"
 )
@@ -20,12 +21,12 @@ type Request struct {
 type DrawRequest struct {
 	Id          int
 	ValidateNum uint8
-	SVG         shapelib.Path
+	SVG         []shapelib.Path
 }
 
 type DeleteRequest struct {
 	Id          int
-	ValidateNum int
+	ValidateNum uint8
 	ShapeHash   string
 }
 
@@ -48,15 +49,16 @@ type RegisterResponse struct {
 }
 
 type InkResponse struct {
-	InkRemaining int
+	InkRemaining uint32
 }
 
 type DrawResponse struct {
 	ShapeHash    string
 	BlockHash    string
-	InkRemaining int
+	InkRemaining uint32
 }
 
+// TODO: This is currently insufficient for our blockchain, need to make it better, add it to a different lib
 type Block struct {
 	PrevHash    string
 	ReqRecord   []Request
