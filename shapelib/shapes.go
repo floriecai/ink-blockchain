@@ -38,12 +38,12 @@ func NewPath(points []Point, filled bool) Path {
 		}
 	}
 
-	return Path { points, filled, xMin, xMax, yMin, yMax }
+	return Path{points, filled, xMin, xMax, yMin, yMax}
 }
 
 // Generate a sub array for the Path object.
 // Will fill based on the Filled field of Path.
-func (p Path)GetSubArray() PixelSubArray {
+func (p Path) GetSubArray() PixelSubArray {
 	// Create a new sub array that can fit the Path
 	sub := NewPixelSubArray(p.XMin, p.XMax, p.YMin, p.YMax)
 
@@ -58,10 +58,10 @@ func (p Path)GetSubArray() PixelSubArray {
 		// The fill count must be even at the end.
 		yStartFillCount := 0
 
-		for i := 0; i < len(p.Points) - 1; i++ {
+		for i := 0; i < len(p.Points)-1; i++ {
 			if i+1 < len(p.Points) && p.Points[i+1].Moved {
-				if (yStartFillCount % 2 == 1) {
-					sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
+				if yStartFillCount%2 == 1 {
+					sub.flipAllRight(p.Points[len(p.Points)-1].X, yPrev)
 				}
 
 				yStartFillCount = 0
@@ -94,7 +94,7 @@ func (p Path)GetSubArray() PixelSubArray {
 						sub.flipAllRight(x, y)
 
 						if y == yStart {
-							yStartFillCount ++
+							yStartFillCount++
 						}
 					}
 
@@ -103,13 +103,13 @@ func (p Path)GetSubArray() PixelSubArray {
 			}
 		}
 
-		if (yStartFillCount % 2 == 1) {
-			sub.flipAllRight(p.Points[len(p.Points) - 1].X, yPrev)
+		if yStartFillCount%2 == 1 {
+			sub.flipAllRight(p.Points[len(p.Points)-1].X, yPrev)
 		}
 	}
 
 	// Do the outline of the shape
-	for i := 0; i < len(p.Points) - 1; i++ {
+	for i := 0; i < len(p.Points)-1; i++ {
 		if p.Points[i+1].Moved {
 			continue
 		}
@@ -136,10 +136,10 @@ func (p Path)GetSubArray() PixelSubArray {
 }
 
 // Compute total length of the path
-func (p Path)TotalLength() int {
+func (p Path) TotalLength() int {
 	sum := float64(0)
 
-	for i := 0; i < len(p.Points) - 1; i++ {
+	for i := 0; i < len(p.Points)-1; i++ {
 		if p.Points[i+1].Moved {
 			continue
 		}
@@ -160,16 +160,16 @@ func (p Path)TotalLength() int {
 // Basic. Here in the case that someone doesn't want to
 // manually create a circle struct
 func NewCircle(xc, yc, radius int, filled bool) Circle {
-	return Circle {Point {xc, yc, false}, radius, filled}
+	return Circle{Point{xc, yc, false}, radius, filled}
 }
 
 // Compute 2pi * r
-func (c Circle)Circumference() int {
-	return int((math.Pi*float64(c.R)*2.0) + 0.5)
+func (c Circle) Circumference() int {
+	return int((math.Pi * float64(c.R) * 2.0) + 0.5)
 }
 
 // Return a PixelSubArray representing the Circle
-func (c Circle)GetSubArray() PixelSubArray {
+func (c Circle) GetSubArray() PixelSubArray {
 	sub := NewPixelSubArray(c.C.X-c.R, c.C.X+c.R, c.C.Y-c.R, c.C.Y+c.R)
 
 	// Variables are named xLen and yLen because they are relative to c.C;
@@ -178,24 +178,24 @@ func (c Circle)GetSubArray() PixelSubArray {
 	rSquared := pow(float64(c.R), 2)
 
 	for yLen := 0; yLen <= c.R; yLen++ {
-		xLen := int(sqrt(rSquared - pow(float64(yLen), 2)) + 0.5)
+		xLen := int(sqrt(rSquared-pow(float64(yLen), 2)) + 0.5)
 
-		sub.set(c.C.X + xLen, c.C.Y + yLen)
-		sub.set(c.C.X + xLen, c.C.Y - yLen)
-		sub.set(c.C.X - xLen, c.C.Y - yLen)
-		sub.set(c.C.X - xLen, c.C.Y + yLen)
+		sub.set(c.C.X+xLen, c.C.Y+yLen)
+		sub.set(c.C.X+xLen, c.C.Y-yLen)
+		sub.set(c.C.X-xLen, c.C.Y-yLen)
+		sub.set(c.C.X-xLen, c.C.Y+yLen)
 
 		if c.Filled {
 			xLenFill := xLenPrev - 1
-			sub.fillBetween(c.C.X - xLenFill, c.C.X + xLenFill, c.C.Y + yLen)
-			sub.fillBetween(c.C.X - xLenFill, c.C.X + xLenFill, c.C.Y - yLen)
+			sub.fillBetween(c.C.X-xLenFill, c.C.X+xLenFill, c.C.Y+yLen)
+			sub.fillBetween(c.C.X-xLenFill, c.C.X+xLenFill, c.C.Y-yLen)
 		}
 
 		for ; xLenPrev > xLen; xLenPrev-- {
-			sub.set(c.C.X + xLenPrev, c.C.Y + yLen)
-			sub.set(c.C.X + xLenPrev, c.C.Y - yLen)
-			sub.set(c.C.X - xLenPrev, c.C.Y - yLen)
-			sub.set(c.C.X - xLenPrev, c.C.Y + yLen)
+			sub.set(c.C.X+xLenPrev, c.C.Y+yLen)
+			sub.set(c.C.X+xLenPrev, c.C.Y-yLen)
+			sub.set(c.C.X-xLenPrev, c.C.Y-yLen)
+			sub.set(c.C.X-xLenPrev, c.C.Y+yLen)
 		}
 	}
 
