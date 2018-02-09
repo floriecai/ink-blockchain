@@ -111,7 +111,7 @@ func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libmin
 
 func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		response.InkRemaining = MinerInstance.InkAmt
+		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		return nil
 	} else {
 		err = fmt.Errorf("invalid user")
@@ -131,7 +131,7 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 
 func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		response.InkRemaining = MinerInstance.InkAmt
+		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		fmt.Println("deletion is currently unimplemented, sorry!")
 		return nil
 	} else {
