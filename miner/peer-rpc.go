@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"../libminer"
 )
 
 /*******************
@@ -22,6 +23,13 @@ import (
 
 type peerRpc struct {
 	miner *Miner
+
+	// blocksPublished is a map used as a set data structure. It stores
+	// the blockhash as a string. Any received blockhash that is found
+	// to be in this set is assumed to already have been published to
+	// peers, and will not be published again. This is in order to avoid
+	// broadcash loops.
+	blocksPublished map[string]empty
 }
 
 type empty struct{}
@@ -35,7 +43,7 @@ type propagateOpArgs struct {
 }
 
 type propagateBlockArgs struct {
-	block empty // TODO: proper struct here
+	block libminer.Block // TODO: proper struct here
 }
 
 type getBlockChainArgs struct {
@@ -85,7 +93,7 @@ func (p *peerRpc) GetBlockChain(args *empty, reply *getBlockChainArgs) error {
 
 // This will initialize a miner peer listener.
 func listenPeerRpc(addr string, miner *Miner) {
-	pRpc := peerRpc{miner}
+	pRpc := peerRpc{miner, make(map[string]empty)}
 
 	conn, err := net.Listen("tcp", addr)
 	if err != nil {
