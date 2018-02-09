@@ -28,7 +28,7 @@ type Miner struct {
 	CurrJobId int
 	PrivKey *ecdsa.PrivateKey
 	Settings minerserver.MinerNetSettings
-	InkAmt int
+	InkAmt uint32
 	LMI *LibMinerInterface
 	MMI *MinerMinerInterface
 	MSI *MinerServerInterface
