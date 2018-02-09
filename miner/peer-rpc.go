@@ -5,6 +5,13 @@ This file contains the following:
 2. Structs for request and reply for the above
 3. Function to initialize the miner peer listener
 
+Peer RPC calls:
+  Connect(args *connectArgs, reply *empty)
+  Hb(args *empty, reply *empty)
+  PropagateOp(args *propagateOpArgs, reply *empty)
+  PropagateBlock(args *propagateBlockArgs, reply *empty)
+  GetBlockChain(args *empty, reply *getBlockChainArgs)
+
 */
 
 package main
@@ -21,17 +28,19 @@ import (
 * TYPE_DEFINITIONS *
 *******************/
 
+// Struct for maintaining state of the peerRpc
 type peerRpc struct {
 	miner *Miner
 
-	// blocksPublished is a map used as a set data structure. It stores
-	// the blockhash as a string. Any received blockhash that is found
-	// to be in this set is assumed to already have been published to
+	// Param blocksPublished is a map used as a set data structure. It
+	// stores the blockhash as a string. Any received blockhash that is
+	// found to be in this set is assumed to already have been published to
 	// peers, and will not be published again. This is in order to avoid
-	// broadcash loops.
+	// broadcast loops.
 	blocksPublished map[string]empty
 }
 
+// Empty struct. Use for filling required but unused function parameters.
 type empty struct{}
 
 type connectArgs struct {
@@ -43,11 +52,11 @@ type propagateOpArgs struct {
 }
 
 type propagateBlockArgs struct {
-	block libminer.Block // TODO: proper struct here
+	block libminer.Block
 }
 
 type getBlockChainArgs struct {
-	blockChain empty // TODO: proper struct here
+	blockChain []libminer.Block
 }
 
 /***********************
@@ -60,6 +69,10 @@ type getBlockChainArgs struct {
 // the peer as well.
 func (p *peerRpc) Connect(args *connectArgs, reply *empty) error {
 	fmt.Println("Connect called")
+
+	// - Add the peer miner to list of connected peers.
+	// - Start a heartbeat for the new miner.
+
 	return nil
 }
 
@@ -74,6 +87,11 @@ func (p *peerRpc) Hb(args *empty, reply *empty) error {
 // Will not return any useful information.
 func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
 	fmt.Println("PropagateOp called")
+
+	// - Validate the operation
+	// - Update the solver.
+	// - Propagate op to list of connected peers.
+
 	return nil
 }
 
@@ -81,17 +99,26 @@ func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
 // Will not return any useful information.
 func (p *peerRpc) PropagateBlock(args *propagateBlockArgs, reply *empty) error {
 	fmt.Println("PropagateBlock called")
+
+	// - Validate the block
+	// - Add block to block chain.
+	// - Update the solver
+	// - Propagate block to list of connected peers.
+
 	return nil
 }
 
-// This RPC is used for peers to get latest information when they have newly
+// This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
 func (p *peerRpc) GetBlockChain(args *empty, reply *getBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
+
+	// Return a flattened version of the blockchain from somewhere
+
 	return nil
 }
 
-// This will initialize a miner peer listener.
+// This will initialize the miner peer listener.
 func listenPeerRpc(addr string, miner *Miner) {
 	pRpc := peerRpc{miner, make(map[string]empty)}
 
