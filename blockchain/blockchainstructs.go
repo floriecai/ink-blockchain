@@ -1,7 +1,8 @@
 type Operation struct {
 	ShapeHash string
 	OpSig     string
-	SVGOpType string
+	OpType    int    // 0 for Add, 1 for Delete
+	SVGOp     string
 	PubKey    string
 }
 
