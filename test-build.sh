@@ -9,3 +9,4 @@ go test ./miner/*.go
 go test ./minerserver/*.go
 go test ./shapelib/*.go
 go test ./utils/*.go
+# go test ./misc/*.go

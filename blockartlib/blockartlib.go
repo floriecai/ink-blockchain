@@ -230,7 +230,7 @@ func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgS
 	}
 
 	hashedMsg := utils.ComputeHash(drawRequestData)
-	r, s, err := ecdsa.Sign(rand.Reader, &canvas.PrivKey, hashedMsg)
+	r, s, err := ecdsa.Sign(rand.Reader, &(canvas.PrivKey), hashedMsg)
 
 	if err != nil {
 		fmt.Println("Could not sign AddShape request")
