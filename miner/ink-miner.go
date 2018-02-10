@@ -231,6 +231,7 @@ func main() {
 
 
 	// 2. Setup Miner-Miner Listener
+	listenPeerRpc("hello", MinerInstance)
 
 	// 3. Setup Miner Heartbeat Manager
 	// Change interval to 1000ms from 10ms
