@@ -2,15 +2,18 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/md5"
-	"crypto/x509"
 	"crypto/rand"
+	"crypto/x509"
+	"encoding/gob"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net"
 	"net/rpc"
 	"os"
+
 	"../libminer"
 	"../minerserver"
 )
@@ -26,25 +29,33 @@ var ArtNodeList map[int]bool = make(map[int]bool)
 ********************************/
 type Miner struct {
 	CurrJobId int
+<<<<<<< HEAD
 	PrivKey *ecdsa.PrivateKey
 	Settings minerserver.MinerNetSettings
 	InkAmt uint32
 	LMI *LibMinerInterface
 	MMI *MinerMinerInterface
 	MSI *MinerServerInterface
+=======
+	PrivKey   *ecdsa.PrivateKey
+	Addr      net.Addr
+	Settings  minerserver.MinerNetSettings
+	InkAmt    int
+	LMI       *LibMinerInterface
+	MMI       *MinerMinerInterface
+	MSI       *MinerServerInterface
+>>>>>>> 15a763ba378205179f0d7dfa4b4fa86f41cc0e95
 }
 
 type MinerInfo struct {
 	Address net.Addr
-	Key ecdsa.PublicKey
+	Key     ecdsa.PublicKey
 }
 
 type LibMinerInterface struct {
-
 }
 
 type MinerMinerInterface struct {
-
 }
 
 type MinerServerInterface struct {
@@ -90,10 +101,10 @@ func OpenLibMinerConn(ip string) {
 	server.Accept(tcp)
 }
 
-func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error){
+func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		//Generate an id in a basic fashion
-		for i := 0;;i++ {
+		for i := 0; ; i++ {
 			if !ArtNodeList[i] {
 				ArtNodeList[i] = true
 				response.Id = i
@@ -160,8 +171,8 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 | Server Management functions
 ********************************/
 
-func (msi *MinerServerInterface) Register(m MinerInfo, r *minerserver.MinerNetSettings) {
-	reqArgs := minerserver.MinerInfo{Address: m.Address, Key: MinerInstance.PrivKey.PublicKey}
+func (msi *MinerServerInterface) Register(minerAddr net.Addr) {
+	reqArgs := minerserver.MinerInfo{Address: minerAddr, Key: MinerInstance.PrivKey.PublicKey}
 	var resp minerserver.MinerNetSettings
 	err := msi.Client.Call("RServer.Register", &reqArgs, &resp)
 	CheckError(err, "Register:Client.Call")
@@ -171,11 +182,11 @@ func (msi *MinerServerInterface) Register(m MinerInfo, r *minerserver.MinerNetSe
 /*******************************
 | Helpers
 ********************************/
-func Verify(msg []byte, sign []byte, R, S big.Int, privKey *ecdsa.PrivateKey) bool{
+func Verify(msg []byte, sign []byte, R, S big.Int, privKey *ecdsa.PrivateKey) bool {
 	h := md5.New()
 	h.Write(msg)
 	hash := hex.EncodeToString(h.Sum(nil))
-	if hash == hex.EncodeToString(sign) && ecdsa.Verify(&privKey.PublicKey, sign, &R, &S){
+	if hash == hex.EncodeToString(sign) && ecdsa.Verify(&privKey.PublicKey, sign, &R, &S) {
 		return true
 	} else {
 		fmt.Println("invalid access\n")
@@ -184,11 +195,11 @@ func Verify(msg []byte, sign []byte, R, S big.Int, privKey *ecdsa.PrivateKey) bo
 }
 func CheckError(err error, parent string) {
 	if err != nil {
-		fmt.Println(parent, ":: found error! ",err)
+		fmt.Println(parent, ":: found error! ", err)
 	}
 }
 
-func ExtractKeyPairs(pubKey, privKey string){
+func ExtractKeyPairs(pubKey, privKey string) {
 	var PublicKey *ecdsa.PublicKey
 	var PrivateKey *ecdsa.PrivateKey
 
@@ -207,31 +218,34 @@ func ExtractKeyPairs(pubKey, privKey string){
 	if !ecdsa.Verify(PublicKey, []byte("data"), r, s) {
 		fmt.Println("ExtractKeyPairs:: Key pair incorrect, please recheck")
 	}
-		MinerInstance.PrivKey = PrivateKey
-		fmt.Println("ExtractKeyPairs:: Key pair verified")
+	MinerInstance.PrivKey = PrivateKey
+	fmt.Println("ExtractKeyPairs:: Key pair verified")
 }
 
 /*******************************
 | Main
 ********************************/
 func main() {
+	gob.Register(&net.TCPAddr{})
+	gob.Register(&elliptic.CurveParams{})
 	serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
 
+	// TODO - Undo the hardcoding after we're done testing
+	ln, _ := net.Listen("tcp", ":8080")
+	addr := ln.Addr()
+
+	MinerInstance.Addr = addr
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
-
-
-	// TODO: Get MinerNetSettings from server
-
+	MinerInstance.MSI.Register(addr)
 
 	// 2. Setup Miner-Miner Listener
-	listenPeerRpc("hello", MinerInstance)
 
 	// 3. Setup Miner Heartbeat Manager
 	// Change interval to 1000ms from 10ms

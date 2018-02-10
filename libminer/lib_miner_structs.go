@@ -3,8 +3,9 @@ package libminer
 import (
 	"math/big"
 
-	"../shapelib"
 	"crypto/ecdsa"
+
+	"../shapelib"
 )
 
 // Msgs used by both blockartlib and miner
