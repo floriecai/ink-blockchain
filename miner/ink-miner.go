@@ -69,6 +69,7 @@ type Peer struct {
 	Client 			*rpc.Client
 	LastHeartBeat 	time.Time
 }
+
 /*******************************
 | Miner functions
 ********************************/
@@ -90,11 +91,12 @@ func (m *Miner) ConnectToServer(ip string) {
 	miner_server_int.Client = client
 	m.MSI = miner_server_int
 }
+
 /*******************************
 | Lib->Miner RPC functions
 ********************************/
 
-//Setup an interface that implements rpc calls for the lib
+// Setup an interface that implements rpc calls for the lib
 func OpenLibMinerConn(ip string) {
 	lib_miner_int := new(LibMinerInterface)
 
@@ -167,6 +169,17 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 		err = fmt.Errorf("invalid user")
 		return err
 	}
+}
+
+func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
+    if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		children := GetBlockChildren(req.BlockHash)
+		response.Blocks = children
+        return nil
+    } else {
+        err = fmt.Errorf("invalid user")
+        return err
+    }
 }
 
 /*******************************
