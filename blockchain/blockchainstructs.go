@@ -1,7 +1,19 @@
+const (
+	ADD int = iota
+	DELETE
+)
+
+type OpType int
+
+const (
+	ADD OpType = iota
+	DELETE
+)
+
 type Operation struct {
 	ShapeHash string
 	OpSig     string
-	OpType    int    // 0 for Add, 1 for Delete
+	OpType    OpType
 	SVGOp     string
 	PubKey    string
 }
