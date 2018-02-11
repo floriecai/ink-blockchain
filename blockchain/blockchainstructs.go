@@ -1,3 +1,5 @@
+package blockchain
+
 type OpType int
 
 const (
@@ -15,6 +17,7 @@ type Operation struct {
 
 type Block struct {
 	PrevHash    string
+	ThisHash    string
 	OpHistory   []Operation
 	MinerPubKey string
 	Nonce       string
