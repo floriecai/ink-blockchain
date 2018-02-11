@@ -261,7 +261,7 @@ func (msi *MinerServerInterface) Register(minerAddr net.Addr) {
 
 func (msi *MinerServerInterface) ServerHeartBeat() {
 	var ignored bool
-	fmt.Println("ServerHeartBeat::Sending heartbeat")
+	//fmt.Println("ServerHeartBeat::Sending heartbeat")
 	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
 	if CheckError(err, "ServerHeartBeat"){
 		//Reconnect to server if timed out
@@ -315,7 +315,7 @@ func (msi *MinerServerInterface) GetPeers() {
 // This is the central point of control for the peer connectivity
 func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Block) {
 	// Send heartbeats at three times the timeout interval to be safe
-	interval := time.Duration(MinerInstance.Settings.HeartBeat / 3)
+	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
 	for {
 		select {
@@ -396,27 +396,53 @@ func CheckLiveliness() {
 
 func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 	solved := make(chan blockchain.Block)
+	var done chan bool
 	for {
-	case op := <- sop:
-		fmt.Println("got new op to hash")
-	case block := <- sblock:
-		fmt.Println("got new block to hash")
-	case sol := <- solved:
-		fmt.Println("got a solution")
-	case CurrJobId == 0:
-		FirstJob(solved)
-	default:
-		// Wait for current job to change
+		select {
+		case op := <- sop:
+			fmt.Println("got new op to hash:", op)
+		case block := <- sblock:
+			fmt.Println("got new block to hash:", block)
+		case sol := <- solved:
+			fmt.Println("got a solution:", sol)
+			close(done)
+			close(solved)
+			solved = make(chan blockchain.Block)
+			// TODO: add block to our new data structures
+			// TODO: start a noop block chain
+		default:
+			if CurrJobId == 0 {
+				fmt.Println("Initiating the first job")
+				block := blockchain.Block{PrevHash: MinerInstance.Settings.GenesisBlockHash,
+					MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
+				done = FirstJob(block, solved)
+			}
+			// Wait for current job to change
+		}
 	}
 }
 
 // Initiate the first job on the genesis block hash
-func FirstJob(solved chan blockchain.Block) {
-	CurrJobId++
+func FirstJob(block blockchain.Block, solved chan blockchain.Block) (chan bool){
+	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
-		start = Math.MaxUint64/MAX_THREADS * i
-		pow.Solve(block, solved)
+		CurrJobId++
+		// Split up the start by the maximum number of threads we allow
+		start := math.MaxUint32/MAX_THREADS * i
+		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyNoOpBlock, uint32(start), solved, done)
 	}
+	return done
+}
+
+func NoopJob(block blockchain.Block, solved chan blockchain.Block) (chan bool){
+	done := make(chan bool)
+	for i := 0; i <= MAX_THREADS; i++ {
+		CurrJobId++
+		// Split up the start by the maximum number of threads we allow
+		start := math.MaxUint32/MAX_THREADS * i
+		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyNoOpBlock, uint32(start), solved, done)
+	}
+	return done
 }
 
 /*******************************
