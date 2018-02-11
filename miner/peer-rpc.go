@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
-	"../libminer"
+	"../blockchain"
 )
 
 /*******************
@@ -47,15 +47,17 @@ type ConnectArgs struct {
 }
 
 type PropagateOpArgs struct {
-	op Empty // TODO: proper struct here
+	op blockchain.Operation
+	TTL int
 }
 
 type PropagateBlockArgs struct {
-	block libminer.Block
+	block blockchain.Block
+	TTL int
 }
 
 type GetBlockChainArgs struct {
-	blockChain []libminer.Block
+	blockChain []blockchain.Block
 }
 
 /***********************
@@ -66,7 +68,7 @@ type GetBlockChainArgs struct {
 // requesting connect will be added to the maintained peer count. There will
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
-func (p PeerRpc) Connect(args *ConnectArgs, reply *Empty) error {
+func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
 	fmt.Println("Connect called by: ", args.Peer_addr)
 
 	// - Add the peer miner to list of connected peers.
@@ -85,7 +87,7 @@ func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateOp(args *PropagateOpArgs, reply *Empty) error {
+func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	fmt.Println("PropagateOp called")
 
 	// - Validate the operation
@@ -97,7 +99,7 @@ func (p PeerRpc) PropagateOp(args *PropagateOpArgs, reply *Empty) error {
 
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateBlock(args *PropagateBlockArgs, reply *Empty) error {
+func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
 	// - Validate the block
@@ -110,7 +112,7 @@ func (p PeerRpc) PropagateBlock(args *PropagateBlockArgs, reply *Empty) error {
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p PeerRpc) GetBlockChain(args *Empty, reply *GetBlockChainArgs) error {
+func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
 
 	// Return a flattened version of the blockchain from somewhere
