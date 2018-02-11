@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -193,7 +194,7 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 /*******************************
 | Blockchain functions
 ********************************/
-/*
+
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
 	// Create a new node for newBlock and append it to BlockNodeArray
@@ -206,7 +207,7 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 		BlockHashMap[childHash] = childIndex
 		// Update the entry for newBlock's parent in BlockNodeArray
 		parentIndex := BlockHashMap[newBlock.PrevHash]
-		parentBlock := BlockNodeArray[parentIndex].Block
+		parentBlock := BlockNodeArray[parentIndex]
 		parentBlock.Children = append(parentBlock.Children, childIndex)
 		return nil
 	} else {
@@ -231,22 +232,15 @@ func GetBlockChildren(blockHash string) []blockchain.Block {
 	return children
 }
 
-func GetBlockHash(block blockchain.Block) string {
-	h := md5.New()
-	hashIn := pow.Stringify(block) + block.Nonce
-	h.Write([]byte(hashIn))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func VerifyBlock(block blockchain.Block) bool {
 	hash := GetBlockHash(block)
 	if len(block.OpHistory) == 0 {
-		return pow.Verify(hash, MinerInstance.Settings.PoWDifficultyNoOpBlock)
+		return pow.Verify(hash, int(MinerInstance.Settings.PoWDifficultyNoOpBlock))
 	} else { 
-		return pow.Verify(hash, MinerInstance.Settings.PoWDifficultyOpBlock)
+		return pow.Verify(hash, int(MinerInstance.Settings.PoWDifficultyOpBlock))
 	}
 }
-*/
+
 /*******************************
 | Server Management functions
 ********************************/
@@ -396,7 +390,10 @@ func CheckLiveliness() {
 
 func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 	solved := make(chan blockchain.Block)
+
+	// Channel returned by a job call that can kill the workers for that particular job
 	var done chan bool
+
 	for {
 		select {
 		case op := <- sop:
@@ -405,25 +402,29 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 			fmt.Println("got new block to hash:", block)
 		case sol := <- solved:
 			fmt.Println("got a solution:", sol)
+
+			// Kill current job
 			close(done)
 			close(solved)
+
+			// Make a new channel
 			solved = make(chan blockchain.Block)
 			// TODO: add block to our new data structures
 			// TODO: start a noop block chain
 		default:
 			if CurrJobId == 0 {
 				fmt.Println("Initiating the first job")
-				block := blockchain.Block{PrevHash: MinerInstance.Settings.GenesisBlockHash,
-					MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
-				done = FirstJob(block, solved)
+				done = NoopJob(MinerInstance.Settings.GenesisBlockHash, solved)
 			}
 			// Wait for current job to change
 		}
 	}
 }
 
-// Initiate the first job on the genesis block hash
-func FirstJob(block blockchain.Block, solved chan blockchain.Block) (chan bool){
+// Initiate a job with an empty op array and a blockhash
+func NoopJob(hash string, solved chan blockchain.Block) (chan bool){
+	block := blockchain.Block{PrevHash: hash,
+		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
 		CurrJobId++
@@ -434,13 +435,17 @@ func FirstJob(block blockchain.Block, solved chan blockchain.Block) (chan bool){
 	return done
 }
 
-func NoopJob(block blockchain.Block, solved chan blockchain.Block) (chan bool){
+// Initiate the a job with a predefined op array
+func OpJob(hash string, Ops []blockchain.Operation, solved chan blockchain.Block) (chan bool){
+	block := blockchain.Block{PrevHash: hash,
+		OpHistory: Ops,
+		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
 		CurrJobId++
 		// Split up the start by the maximum number of threads we allow
 		start := math.MaxUint32/MAX_THREADS * i
-		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyNoOpBlock, uint32(start), solved, done)
+		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyOpBlock, uint32(start), solved, done)
 	}
 	return done
 }
@@ -494,6 +499,13 @@ func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
 }
 
+func GetBlockHash(block blockchain.Block) string {
+	h := md5.New()
+	bytes, _ := json.Marshal(block)
+	h.Write(bytes)
+	hash := hex.EncodeToString(h.Sum(nil))
+	return hash
+}
 
 /*******************************
 | Main
@@ -517,6 +529,7 @@ func main() {
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
+	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
 
 	// 3. Setup Miner Heartbeat Manager
 	pop := make(chan blockchain.Operation)

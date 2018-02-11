@@ -7,7 +7,7 @@ Purpose: to lay out our objectives for completing the project
 ## Miner
 
 - [x] Miner Connection to Server
-- [ ] Miner completes crypto puzzles
+- [x] Miner completes crypto puzzles
 - [ ] Miner creates a block chain of noops starting from genesis block
 - [ ] Miner sends the longest chain to other miners
 - [x] Miner accepts rpc calls from art nodes
