@@ -66,7 +66,7 @@ type MinerNetSettings struct {
 	PoWDifficultyNoOpBlock uint8
 
 	// Canvas settings
-	canvasSettings CanvasSettings
+	CanvasSettings CanvasSettings
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -223,23 +223,12 @@ func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgS
 	shapelibPaths := utils.SVGToPoints(paths, int(canvas.Settings.CanvasXMax), int(canvas.Settings.CanvasYMax), fill != TRANSPARENT)
 
 	drawRequest := libminer.DrawRequest{Id: canvas.Id, ValidateNum: validateNum, SVG: shapelibPaths}
-	drawRequestData, err := json.Marshal(drawRequest)
+	msg, _ := json.Marshal(drawRequest)
+	req := getRPCRequest(msg, &canvas.PrivKey)
 
-	if err != nil {
-		fmt.Println("Issue marshalling shapelib path in ADDSHAPE: %s")
-	}
-
-	hashedMsg := utils.ComputeHash(drawRequestData)
-	r, s, err := ecdsa.Sign(rand.Reader, &canvas.PrivKey, hashedMsg)
-
-	if err != nil {
-		fmt.Println("Could not sign AddShape request")
-	}
-
-	req := libminer.Request{R: *r, S: *s, HashedMsg: hashedMsg, Msg: drawRequestData}
 	var reply libminer.DrawResponse
 
-	err = canvas.Miner.Call("Miner.Draw", &req, &reply)
+	err = canvas.Miner.Call("LibMinerInterface.Draw", &req, &reply)
 
 	if err != nil {
 		fmt.Println("Error on calling Miner.Draw")
@@ -259,9 +248,11 @@ func (canvas CanvasT) GetSvgString(shapeHash string) (svgString string, err erro
 		return "", DisconnectedError(canvas.Id)
 	}
 
-	req := libminer.GenericRequest{Id: canvas.Id}
+	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	req := getRPCRequest(msg, &canvas.PrivKey)
 	var resp libminer.BlocksResponse
-	err = canvas.Miner.Call("Miner.GetBlockChain", &req, &resp)
+
+	err = canvas.Miner.Call("LibMinerInterface.GetBlockChain", &req, &resp)
 
 	if err != nil {
 		checkError(err)
@@ -288,10 +279,11 @@ func (canvas CanvasT) GetInk() (inkRemaining uint32, err error) {
 		return 0, DisconnectedError(canvas.Id)
 	}
 
-	req := libminer.GenericRequest{Id: canvas.Id}
+	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	req := getRPCRequest(msg, &canvas.PrivKey)
 	var resp libminer.InkResponse
 
-	err = canvas.Miner.Call("Miner.GetInk", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetInk", &req, &resp)
 
 	if err != nil {
 		checkError(err)
@@ -311,20 +303,12 @@ func (canvas CanvasT) DeleteShape(validateNum uint8, shapeHash string) (inkRemai
 	}
 
 	deleteArgs := libminer.DeleteRequest{Id: canvas.Id, ShapeHash: shapeHash, ValidateNum: validateNum}
-	deleteRequestMsg, err := json.Marshal(deleteArgs)
+	msg, _ := json.Marshal(deleteArgs)
+	req := getRPCRequest(msg, &canvas.PrivKey)
 
-	if err != nil {
-		log.Println("Error marshalling DeleteShape data")
-		checkError(err)
-		return 0, err
-	}
-
-	hashedMsg := utils.ComputeHash(deleteRequestMsg)
-	r, s, _ := ecdsa.Sign(rand.Reader, &canvas.PrivKey, hashedMsg)
-	req := libminer.Request{R: *r, S: *s, HashedMsg: hashedMsg, Msg: deleteRequestMsg}
 	var resp libminer.InkResponse
 
-	err = canvas.Miner.Call("Miner.Delete", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.Delete", &req, &resp)
 
 	if err != nil {
 		log.Println("Error in Miner.Delete")
@@ -344,10 +328,11 @@ func (canvas CanvasT) GetShapes(blockHash string) (shapeHashes []string, err err
 		return shapeHashes, DisconnectedError(string(canvas.Id))
 	}
 
-	req := libminer.GenericRequest{Id: canvas.Id}
+	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	req := getRPCRequest(msg, &canvas.PrivKey)
 	var resp libminer.BlocksResponse
 
-	err = canvas.Miner.Call("Miner.GetBlockChain", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetBlockChain", &req, &resp)
 
 	if err != nil {
 		log.Println("Error in Miner.GetBlockChain in GetShapes")
@@ -373,10 +358,12 @@ func (canvas CanvasT) GetGenesisBlock() (blockHash string, err error) {
 		return "", DisconnectedError(string(canvas.Id))
 	}
 
-	req := libminer.GenericRequest{Id: canvas.Id}
+	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	req := getRPCRequest(msg, &canvas.PrivKey)
+
 	var resp libminer.BlocksResponse
 
-	err = canvas.Miner.Call("Miner.GetGenesisBlock", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetGenesisBlock", &req, &resp)
 	if err != nil {
 		checkError(err)
 		return "", err
@@ -396,10 +383,12 @@ func (canvas CanvasT) GetChildren(blockHash string) (blockHashes []string, err e
 		return blockHashes, DisconnectedError(string(canvas.Id))
 	}
 
-	req := libminer.GenericRequest{Id: canvas.Id}
+	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	req := getRPCRequest(msg, &canvas.PrivKey)
+
 	var resp libminer.BlocksResponse
 
-	err = canvas.Miner.Call("Miner.GetBlockChain", &req, resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetBlockChain", &req, &resp)
 
 	// TODO fcai - get the children of the blockchain
 	// for i, block := range resp.Blocks {
@@ -418,10 +407,11 @@ func (canvas CanvasT) CloseCanvas() (inkRemaining uint32, err error) {
 		return 0, DisconnectedError(string(canvas.Id))
 	}
 
-	req := libminer.GenericRequest{Id: canvas.Id}
+	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	req := getRPCRequest(msg, &canvas.PrivKey)
 	var resp libminer.InkResponse
 
-	canvas.Miner.Call("Miner.GetInk", &req, &resp)
+	canvas.Miner.Call("LibMinerInterface.GetInk", &req, &resp)
 	return inkRemaining, err
 }
 
@@ -444,27 +434,22 @@ func OpenCanvas(minerAddr string, privKey ecdsa.PrivateKey) (canvas Canvas, sett
 	}
 
 	msg := []byte("Hi")
-	r, s, err := ecdsa.Sign(rand.Reader, &privKey, msg)
-
-	if err != nil {
-		return canvas, setting, err
-	}
-
-	args := &libminer.RegisterRequest{R: *r, S: *s, Msg: msg}
+	req := getRPCRequest(msg, &privKey)
 	var resp libminer.RegisterResponse
 
-	err = miner.Call("Miner.RegisterRequest", args, resp)
+	err = miner.Call("LibMinerInterface.OpenCanvas", &req, &resp)
 
 	if err != nil {
 		return canvas, setting, err
 	}
 
-	canvasT.Miner = miner
-	canvasT.Id = resp.Id
-	canvasT.PrivKey = privKey
-	setting = CanvasSettings{CanvasXMax: resp.CanvasXMax, CanvasYMax: resp.CanvasYMax}
+	canvasT = CanvasT{
+		Miner:    miner,
+		Id:       resp.Id,
+		PrivKey:  privKey,
+		Settings: CanvasSettings{CanvasXMax: resp.CanvasXMax, CanvasYMax: resp.CanvasYMax}}
 
-	return canvasT, setting, nil
+	return canvasT, canvasT.Settings, nil
 }
 
 func checkError(err error) error {
@@ -473,4 +458,12 @@ func checkError(err error) error {
 		return err
 	}
 	return nil
+}
+
+func getRPCRequest(msg []byte, privKey *ecdsa.PrivateKey) libminer.Request {
+	hashedMsg := utils.ComputeHash(msg)
+	r, s, _ := ecdsa.Sign(rand.Reader, privKey, hashedMsg)
+	req := libminer.Request{R: *r, S: *s, HashedMsg: hashedMsg, Msg: msg}
+
+	return req
 }

@@ -13,19 +13,18 @@ import (
 // publicKeyBytes, _ = x509.MarshalPKIXPublicKey(&private_key.PublicKey)
 
 // Private Key:
-// 30770201010420717b415578a72a446ff6d844e72a25f0def82e51206c286ae837fb1ea6478f7aa00a06082a8648ce3d030107a14403420004b8d0de4d1eab31ddf95cb466b4001356acf17f49c1b8dc3cc78cdb7cdb21aee9262b2551fa977e9a6a2b77294d233bdbc38aae74a9bed79b4cf5d0feab35009c
+// 3081a40201010430d35b96ee7ced244b5a47de8968b07ecd38a6dd756f0ffb40a72ccd5895e96f24310c1fc544d7f8d026c55213c8fa2ef2a00706052b81040022a164036200040ef0f59ad36a9661ef93044b53e5c2ca2e7b5ce23323367a3428ebeb256716b8c2cfc63225fd88174193cbe13c3137b41719058cd0fabd5713b91bc7b314f8086fba4b29734d675fccd6a7b4a4ec6af96d499ba64d792522f4710791d214ac45
 
 // Public Key:
-// 3059301306072a8648ce3d020106082a8648ce3d03010703420004b8d0de4d1eab31ddf95cb466b4001356acf17f49c1b8dc3cc78cdb7cdb21aee9262b2551fa977e9a6a2b77294d233bdbc38aae74a9bed79b4cf5d0feab35009c
+// 3076301006072a8648ce3d020106052b81040022036200040ef0f59ad36a9661ef93044b53e5c2ca2e7b5ce23323367a3428ebeb256716b8c2cfc63225fd88174193cbe13c3137b41719058cd0fabd5713b91bc7b314f8086fba4b29734d675fccd6a7b4a4ec6af96d499ba64d792522f4710791d214ac45
 
 func main() {
-	p256 := elliptic.P256()
-	priv1, _ := ecdsa.GenerateKey(p256, rand.Reader)
+	p384 := elliptic.P384()
+	priv1, _ := ecdsa.GenerateKey(p384, rand.Reader)
 
 	privateKeyBytes, _ := x509.MarshalECPrivateKey(priv1)
 
 	encodedPrivateBytes := hex.EncodeToString(privateKeyBytes)
-	fmt.Printf("Private: %s\n", encodedPrivateBytes)
 
 	privateKeyBytesRestored, _ := hex.DecodeString(encodedPrivateBytes)
 	priv2, _ := x509.ParseECPrivateKey(privateKeyBytesRestored)
@@ -45,5 +44,5 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Key was restored from string successfully")
+	fmt.Printf("Key was restored from string successfully\n")
 }

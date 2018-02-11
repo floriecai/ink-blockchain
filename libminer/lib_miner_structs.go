@@ -3,7 +3,6 @@ package libminer
 import (
 	"crypto/ecdsa"
 	"math/big"
-
 	"../blockchain"
 	"../shapelib"
 )

@@ -13,8 +13,12 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+<<<<<<< HEAD
 	"time"
 	"../blockchain"
+=======
+
+>>>>>>> master
 	"../libminer"
 	"../minerserver"
 	"../pow"
@@ -51,6 +55,10 @@ type Miner struct {
 	Settings  minerserver.MinerNetSettings
 	InkAmt    int
 	LMI       *LibMinerInterface
+<<<<<<< HEAD
+=======
+	MMI       *MinerMinerInterface
+>>>>>>> master
 	MSI       *MinerServerInterface
 }
 
@@ -60,6 +68,12 @@ type MinerInfo struct {
 }
 
 type LibMinerInterface struct {
+<<<<<<< HEAD
+=======
+}
+
+type MinerMinerInterface struct {
+>>>>>>> master
 }
 
 type MinerServerInterface struct {
@@ -394,7 +408,10 @@ func Verify(msg []byte, sign []byte, R, S big.Int, privKey *ecdsa.PrivateKey) bo
 func CheckError(err error, parent string) bool {
 	if err != nil {
 		fmt.Println(parent, ":: found error! ", err)
+<<<<<<< HEAD
 		return true
+=======
+>>>>>>> master
 	}
 	return false
 }
@@ -435,6 +452,7 @@ func main() {
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
+<<<<<<< HEAD
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 	// Listening Address
@@ -442,6 +460,20 @@ func main() {
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
 
+=======
+
+	// TODO - Undo the hardcoding after we're done testing
+	ln, _ := net.Listen("tcp", ":8080")
+	addr := ln.Addr()
+
+	MinerInstance.Addr = addr
+	// Extract key pairs
+	ExtractKeyPairs(pubKey, privKey)
+
+	// Connect to Server
+	MinerInstance.ConnectToServer(serverIP)
+	MinerInstance.MSI.Register(addr)
+>>>>>>> master
 
 	// 2. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance)
