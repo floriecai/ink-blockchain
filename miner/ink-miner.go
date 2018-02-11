@@ -258,6 +258,7 @@ func CheckLiveliness() {
 	for addr, peer := range PeerList {
 		if time.Since(peer.LastHeartBeat) > interval {
 			fmt.Println("Stale connection: ", addr, " deleting")
+			peer.Client.Close()
 			delete(PeerList, addr)
 		}
 	}
