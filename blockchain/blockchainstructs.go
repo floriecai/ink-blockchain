@@ -1,3 +1,5 @@
+package inkcoin
+
 type OpType int
 
 const (
