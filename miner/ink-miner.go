@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"net/rpc"
@@ -17,7 +18,7 @@ import (
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
-	//"../pow"
+	"../pow"
 )
 
 // Our singleton miner instance
@@ -29,8 +30,13 @@ var ArtNodeList map[int]bool = make(map[int]bool)
 // List of peers WE connect TO, not peers that connect to US
 var PeerList map[string]*Peer = make(map[string]*Peer)
 
-// Global TTL of propagate requests
-var TTL int = 100
+
+const (
+	// Global TTL of propagate requests
+	TTL = 100
+	// Maximum threads we will use for problem solving
+	MAX_THREADS = 4
+)
 
 // Global block chain array
 var BlockNodeArray []blockchain.BlockNode
@@ -40,12 +46,13 @@ var BlockNodeArray []blockchain.BlockNode
 // Val: The index of block with such hash in BlockNodeArray
 var BlockHashMap map[string]int = make(map[string]int)
 
+// Current Job ID
+var CurrJobId int = 0
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
 ********************************/
 type Miner struct {
-	CurrJobId int
 	PrivKey   *ecdsa.PrivateKey
 	Addr      net.Addr
 	Settings  minerserver.MinerNetSettings
@@ -377,6 +384,41 @@ func CheckLiveliness() {
 		}
 	}
 }
+
+/*******************************
+| Crypto-Management
+********************************/
+// The problemsolver handles 4 main functions
+// 1. Spins new workers for a new job
+// 2. Kills old workers for a new job
+// 3. Receive job updates via the given channels
+// 4. TODO: Return solution
+
+func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
+	solved := make(chan blockchain.Block)
+	for {
+	case op := <- sop:
+		fmt.Println("got new op to hash")
+	case block := <- sblock:
+		fmt.Println("got new block to hash")
+	case sol := <- solved:
+		fmt.Println("got a solution")
+	case CurrJobId == 0:
+		FirstJob(solved)
+	default:
+		// Wait for current job to change
+	}
+}
+
+// Initiate the first job on the genesis block hash
+func FirstJob(solved chan blockchain.Block) {
+	CurrJobId++
+	for i := 0; i <= MAX_THREADS; i++ {
+		start = Math.MaxUint64/MAX_THREADS * i
+		pow.Solve(block, solved)
+	}
+}
+
 /*******************************
 | Helpers
 ********************************/
@@ -425,6 +467,8 @@ func ExtractKeyPairs(pubKey, privKey string) {
 func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
 }
+
+
 /*******************************
 | Main
 ********************************/
@@ -448,12 +492,16 @@ func main() {
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
 
+	// 3. Setup Miner Heartbeat Manager
 	pop := make(chan blockchain.Operation)
 	pblock := make(chan blockchain.Block)
-	// 3. Setup Miner Heartbeat Manager
 	go ManageConnections(pop, pblock)
 
+
 	// 4. Setup Problem Solving
+	sop := make(chan blockchain.Operation)
+	sblock := make(chan blockchain.Block)
+	go ProblemSolver(sop, sblock)
 
 	// 5. Setup Client-Miner Listener (this thread)
 	OpenLibMinerConn(":0")

@@ -3,9 +3,9 @@ package pow
 import (
 	"crypto/md5"
 	"strconv"
-
 	"../blockchain"
 	"../libminer"
+	"encoding/json"
 )
 
 // Return true if hex representation of hash has exactly N trailing zeroes
@@ -14,22 +14,10 @@ func Verify(hash string, N int) bool {
 	return strings.Count(hash[l-N], "0") == N && strings.Count(hash[l-N-1], "0") == N
 }
 
-func Stringify(block blockchain.Block) string {
-	s := ""
-	s += block.PrevHash
-	s += "["
-	for _, op := range block.opHistory {
-		s += "{" + op.ShapeHash + ", " + op.OpSig + ", " + strconv.Itoa(op.OpType) + ", " + op.SVGOpType + ", " + op.PubKey + "}"
-	}
-	s += "]"
-	s += block.MinerPubKey
-	return s
-}
-
-func Solve(block blockchain.Block, powDiff uint8, out chan) string {
+func Solve(block blockchain.Block, powDiff uint8, start uint64, out chan) string {
 	h := md5.New()
 	N := int(powDiff)
-	hashIn := Stringify(block)
+	hashIn := json.Marshal(block)
 	secret := 0
 	for {
 		h.Write([]byte(hashIn + strconv.Itoa(secret)))
