@@ -13,38 +13,28 @@ import (
 	"net"
 	"net/rpc"
 	"os"
-
+	"time"
 	"../libminer"
 	"../minerserver"
 )
 
 var MinerInstance *Miner
-
 //Primitive representation of active art miners
 var ArtNodeList map[int]bool = make(map[int]bool)
 
+var PeerList map[string]*Peer = make(map[string]*Peer)
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
 ********************************/
 type Miner struct {
 	CurrJobId int
-<<<<<<< HEAD
-	PrivKey *ecdsa.PrivateKey
-	Settings minerserver.MinerNetSettings
-	InkAmt uint32
-	LMI *LibMinerInterface
-	MMI *MinerMinerInterface
-	MSI *MinerServerInterface
-=======
 	PrivKey   *ecdsa.PrivateKey
 	Addr      net.Addr
 	Settings  minerserver.MinerNetSettings
 	InkAmt    int
 	LMI       *LibMinerInterface
-	MMI       *MinerMinerInterface
 	MSI       *MinerServerInterface
->>>>>>> 15a763ba378205179f0d7dfa4b4fa86f41cc0e95
 }
 
 type MinerInfo struct {
@@ -55,13 +45,14 @@ type MinerInfo struct {
 type LibMinerInterface struct {
 }
 
-type MinerMinerInterface struct {
-}
-
 type MinerServerInterface struct {
 	Client *rpc.Client
 }
 
+type Peer struct {
+	Client 			*rpc.Client
+	LastHeartBeat 	time.Time
+}
 /*******************************
 | Miner functions
 ********************************/
@@ -79,11 +70,10 @@ func (m *Miner) ConnectToServer(ip string) {
 
 	client := rpc.NewClient(conn)
 	miner_server_int.Client = client
-	MinerInstance.MSI = miner_server_int
+	m.MSI = miner_server_int
 }
-
 /*******************************
-| RPC functions
+| Lib->Miner RPC functions
 ********************************/
 
 //Setup an interface that implements rpc calls for the lib
@@ -174,11 +164,85 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 func (msi *MinerServerInterface) Register(minerAddr net.Addr) {
 	reqArgs := minerserver.MinerInfo{Address: minerAddr, Key: MinerInstance.PrivKey.PublicKey}
 	var resp minerserver.MinerNetSettings
-	err := msi.Client.Call("RServer.Register", &reqArgs, &resp)
+	err := msi.Client.Call("RServer.Register", reqArgs, &resp)
 	CheckError(err, "Register:Client.Call")
 	MinerInstance.Settings = resp
 }
 
+func (msi *MinerServerInterface) ServerHeartBeat() {
+	var ignored bool
+	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
+	CheckError(err, "ServerHeartBeat")
+}
+
+func (msi *MinerServerInterface) GetPeers() {
+	var addrSet []net.Addr
+	var empty empty
+	msi.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
+	for _, addr := range addrSet {
+		fmt.Println("Calling address: ", addr.String(), "\n")
+		LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
+		CheckError(err, "GetPeers:ResolvePeerAddr")
+
+		PeerAddr, err := net.ResolveTCPAddr("tcp", addr.String())
+		CheckError(err, "GetPeers:ResolveLocalAddr")
+
+		conn, err := net.DialTCP("tcp", LocalAddr, PeerAddr)
+		CheckError(err, "GetPeers:DialTCP")
+
+		client := rpc.NewClient(conn)
+
+		err = client.Call("peerRPC.Connect", LocalAddr.String(), &empty)
+		CheckError(err, "GetPeers:Connect")
+
+		PeerList[addr.String()] = &Peer{client, time.Now()}
+	}
+}
+/*******************************
+| Connection Management
+********************************/
+// This function has 4 purposes:
+// 1. Send the server heartbeat to maintain connectivity
+// 2. Send miner heartbeats to maintain connectivity with peers
+// 3. Check for stale peers and remove them from the list
+// 4. Request new nodes from server and connect to them when peers drop too low
+// This is the central point of control for the peer connectivity
+func ManageConnections() {
+	// Send heartbeats at four times the timeout interval to be safe
+	interval := time.Duration(MinerInstance.Settings.HeartBeat / 4)
+	heartbeat := time.Tick(interval * time.Millisecond)
+	for {
+		select {
+		case <- heartbeat:
+			MinerInstance.MSI.ServerHeartBeat()
+			PeerHeartBeats()
+		default:
+			CheckLiveliness()
+			if len(PeerList) < int(MinerInstance.Settings.MinNumMinerConnections) {
+				MinerInstance.MSI.GetPeers()
+			}
+		}
+	}
+}
+
+// Send a heartbeat call to each peer
+func PeerHeartBeats() {
+	for addr, peer := range PeerList {
+		empty := new(empty)
+		err := peer.Client.Call("Peer.Hb", &empty, &empty)
+		CheckError(err, "PeerHeartBeats:"+addr)
+	}
+}
+// Look through current active connections and delete them if they are not live
+func CheckLiveliness() {
+	interval := time.Duration(MinerInstance.Settings.HeartBeat)
+	for addr, peer := range PeerList {
+		if time.Since(peer.LastHeartBeat) > interval {
+			fmt.Println("Stale connection: ", addr, " deleting")
+			delete(PeerList, addr)
+		}
+	}
+}
 /*******************************
 | Helpers
 ********************************/
@@ -222,6 +286,9 @@ func ExtractKeyPairs(pubKey, privKey string) {
 	fmt.Println("ExtractKeyPairs:: Key pair verified")
 }
 
+func pubKeyToString(key ecdsa.PublicKey) string {
+	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
+}
 /*******************************
 | Main
 ********************************/
@@ -249,9 +316,10 @@ func main() {
 
 	// 3. Setup Miner Heartbeat Manager
 	// Change interval to 1000ms from 10ms
+	go ManageConnections()
 
 	// 4. Setup Problem Solving
 
 	// 5. Setup Client-Miner Listener (this thread)
-	OpenLibMinerConn(":8080")
+	OpenLibMinerConn(":8090")
 }

@@ -31,7 +31,7 @@ import (
 // Struct for maintaining state of the peerRpc
 type peerRpc struct {
 	miner *Miner
-
+	
 	// Param blocksPublished is a map used as a set data structure. It
 	// stores the blockhash as a string. Any received blockhash that is
 	// found to be in this set is assumed to already have been published to
