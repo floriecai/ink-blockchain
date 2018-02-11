@@ -20,43 +20,44 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
-	"os"
-	"../libminer"
+	"../blockchain"
 )
 
 /*******************
 * TYPE_DEFINITIONS *
 *******************/
 
-// Struct for maintaining state of the peerRpc
-type peerRpc struct {
+// Struct for maintaining state of the PeerRpc
+type PeerRpc struct {
 	miner *Miner
-
+	
 	// Param blocksPublished is a map used as a set data structure. It
 	// stores the blockhash as a string. Any received blockhash that is
 	// found to be in this set is assumed to already have been published to
 	// peers, and will not be published again. This is in order to avoid
 	// broadcast loops.
-	blocksPublished map[string]empty
+	blocksPublished map[string]Empty
 }
 
 // Empty struct. Use for filling required but unused function parameters.
-type empty struct{}
+type Empty struct{}
 
-type connectArgs struct {
-	peer_addr string
+type ConnectArgs struct {
+	Peer_addr string
 }
 
-type propagateOpArgs struct {
-	op empty // TODO: proper struct here
+type PropagateOpArgs struct {
+	op blockchain.Operation
+	TTL int
 }
 
-type propagateBlockArgs struct {
-	block libminer.Block
+type PropagateBlockArgs struct {
+	block blockchain.Block
+	TTL int
 }
 
-type getBlockChainArgs struct {
-	blockChain []libminer.Block
+type GetBlockChainArgs struct {
+	blockChain []blockchain.Block
 }
 
 /***********************
@@ -67,25 +68,26 @@ type getBlockChainArgs struct {
 // requesting connect will be added to the maintained peer count. There will
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
-func (p *peerRpc) Connect(args *connectArgs, reply *empty) error {
-	fmt.Println("Connect called")
+func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
+	fmt.Println("Connect called by: ", args.Peer_addr)
 
 	// - Add the peer miner to list of connected peers.
 	// - Start a heartbeat for the new miner.
+
 
 	return nil
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is
 // still alive.
-func (p *peerRpc) Hb(args *empty, reply *empty) error {
+func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
 	fmt.Println("Hb called")
 	return nil
 }
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
+func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	fmt.Println("PropagateOp called")
 
 	// - Validate the operation
@@ -97,7 +99,7 @@ func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
 
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p *peerRpc) PropagateBlock(args *propagateBlockArgs, reply *empty) error {
+func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
 	// - Validate the block
@@ -110,7 +112,7 @@ func (p *peerRpc) PropagateBlock(args *propagateBlockArgs, reply *empty) error {
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p *peerRpc) GetBlockChain(args *empty, reply *getBlockChainArgs) error {
+func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
 
 	// Return a flattened version of the blockchain from somewhere
@@ -119,17 +121,13 @@ func (p *peerRpc) GetBlockChain(args *empty, reply *getBlockChainArgs) error {
 }
 
 // This will initialize the miner peer listener.
-func listenPeerRpc(addr string, miner *Miner) {
-	pRpc := peerRpc{miner, make(map[string]empty)}
+func listenPeerRpc(ln net.Listener, miner *Miner) {
+	pRpc := PeerRpc{miner, make(map[string]Empty)}
 
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		fmt.Println("Peer RPC could not initialize tcp listener")
-		os.Exit(1)
-	}
+	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
 	server := rpc.NewServer()
 	server.RegisterName("Peer", pRpc)
 
-	server.Accept(conn)
+	server.Accept(ln)
 }
