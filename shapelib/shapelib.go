@@ -24,16 +24,22 @@ Public types and methods:
 
 	PixelSubArray
 	  Print()
-	  GetPixelsFilled() -> int
+	  PixelsFilled() -> int
 
 	Point
 
+	Shape
+	  SubArray() -> PixelSubArray
+	  LineCost() -> int
+
 	Path
-	  GetSubArray() -> PixelSubArray
+	  SubArray()    -> PixelSubArray
+	  LineCost()    -> int
 	  TotalLength() -> int
 
 	Circle
-	  GetSubArray() -> PixelSubArray
+	  SubArray()      -> PixelSubArray
+	  LineCost()      -> int
 	  Circumference() -> int
 
 
@@ -57,6 +63,18 @@ type PixelSubArray struct {
 	bytes      [][]byte
 	xStartByte int
 	yStart     int
+}
+
+// Interface for a shape that can return its subarray of pixel filled.
+type Shape interface {
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape.
+	SubArray() PixelSubArray
+
+	// Returns the line cost of this shape. Intended use case is to get
+	// the ink cost of a shape that has fill = "transparent"
+	LineCost() int
 }
 
 // Represents the data of a Path SVG item.

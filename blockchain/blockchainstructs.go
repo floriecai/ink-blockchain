@@ -12,6 +12,8 @@ type Operation struct {
 	OpSig     string
 	OpType    OpType
 	SVGOp     string
+	Fill      string
+	Stroke    string
 	PubKey    string
 }
 

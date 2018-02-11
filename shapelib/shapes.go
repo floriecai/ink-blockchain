@@ -16,6 +16,10 @@ var sqrt = math.Sqrt
 
 // Create a new Path struct from a Point slice.
 func NewPath(points []Point, filled bool) Path {
+	if points == nil {
+		return Path{nil, false, 0, 0, 0, 0}
+	}
+
 	xMin := points[0].X
 	xMax := points[0].X
 	yMin := points[0].Y
@@ -43,7 +47,7 @@ func NewPath(points []Point, filled bool) Path {
 
 // Generate a sub array for the Path object.
 // Will fill based on the Filled field of Path.
-func (p Path) GetSubArray() PixelSubArray {
+func (p Path) SubArray() PixelSubArray {
 	// Create a new sub array that can fit the Path
 	sub := NewPixelSubArray(p.XMin, p.XMax, p.YMin, p.YMax)
 
@@ -155,6 +159,11 @@ func (p Path) TotalLength() int {
 	return int(sum + 0.5)
 }
 
+// Calls total length - use for matching the Shape interface.
+func (p Path) LineCost() int {
+	return p.TotalLength()
+}
+
 /* CIRCLE_FUNCTIONS */
 
 // Basic. Here in the case that someone doesn't want to
@@ -168,8 +177,13 @@ func (c Circle) Circumference() int {
 	return int((math.Pi * float64(c.R) * 2.0) + 0.5)
 }
 
+// Calls Circumference(). Used to match Shape {} interface.
+func (c Circle) LineCost() int {
+	return c.Circumference()
+}
+
 // Return a PixelSubArray representing the Circle
-func (c Circle) GetSubArray() PixelSubArray {
+func (c Circle) SubArray() PixelSubArray {
 	sub := NewPixelSubArray(c.C.X-c.R, c.C.X+c.R, c.C.Y-c.R, c.C.Y+c.R)
 
 	// Variables are named xLen and yLen because they are relative to c.C;

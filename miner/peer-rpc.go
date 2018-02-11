@@ -21,7 +21,10 @@ import (
 	"net"
 	"net/rpc"
 	"os"
-	"../libminer"
+	"../blockchain"
+	"../shapelib"
+	"../utils"
+	"sync"
 )
 
 /*******************
@@ -48,15 +51,15 @@ type connectArgs struct {
 }
 
 type propagateOpArgs struct {
-	op empty // TODO: proper struct here
+	op blockchain.Operation
 }
 
 type propagateBlockArgs struct {
-	block libminer.Block
+	block blockchain.Block
 }
 
 type getBlockChainArgs struct {
-	blockChain []libminer.Block
+	blockChain []blockchain.Block
 }
 
 /***********************
@@ -76,19 +79,63 @@ func (p *peerRpc) Connect(args *connectArgs, reply *empty) error {
 	return nil
 }
 
-// This RPC is a no-op. It's used by the peer to ensure that this miner is
-// still alive.
+// This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
 func (p *peerRpc) Hb(args *empty, reply *empty) error {
 	fmt.Println("Hb called")
 	return nil
 }
+
+// Get a shapelib.Path from an operation
+func (m Miner)getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
+	pathlist, err := utils.GetParsedSVG(op.SVGOp)
+	if err != nil {
+		fmt.Println("PropagateOp err:", err);
+		path := shapelib.NewPath(nil, false)
+		return path, err
+	}
+
+	// Get the shapelib.Path representation for this svg path
+	path := utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
+		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
+
+	return path[0], nil
+}
+
+// This lock is intended to be used so that only one operation will be in the
+// validation procedure at any given point. This is to prevent race conditions
+// of multiple, conflicting operations.
+var validateOpLock sync.Mutex
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
 func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
 	fmt.Println("PropagateOp called")
 
-	// - Validate the operation
+	// Get the shapelib.Path representation for this svg path
+	path, err := p.miner.getPathFromOp(args.op)
+	if err != nil {
+		return err
+	}
+
+	// Get the subarr for checking conflicting shapes, as well as for computing area
+	// in the case that fill is not transparent.
+	subarr := path.SubArray()
+
+	var inkRequired int
+	if args.op.Fill != "transparent" {
+		inkRequired = path.TotalLength()
+	} else {
+		inkRequired = subarr.PixelsFilled()
+	}
+
+	validateOpLock.Lock()
+	err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.op.PubKey)
+	validateOpLock.Unlock()
+
+	if err != nil {
+		return err
+	}
+
 	// - Update the solver.
 	// - Propagate op to list of connected peers.
 
