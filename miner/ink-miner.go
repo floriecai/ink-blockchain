@@ -17,6 +17,7 @@ import (
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
+	"../pow"
 )
 
 // Our singleton miner instance
@@ -35,8 +36,8 @@ var TTL int = 100
 var BlockNodeArray []blockchain.BlockNode
 
 // Global block chain search map
-// Key: Block.ThisHash
-// Val: IndexOfBlock(Block)
+// Key: The hash of a block
+// Val: The index of block with such hash in BlockNodeArray
 var BlockHashMap map[string]int = make(map[string]int)
 
 /*******************************
@@ -187,17 +188,24 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 ********************************/
 
 // Appends the new block to BlockArray and updates BlockHashMap
-func InsertBlock(newBlock blockchain.Block) {
+func InsertBlock(newBlock blockchain.Block) (err error) {
 	// Create a new node for newBlock and append it to BlockNodeArray
 	newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
 	BlockNodeArray = append(BlockNodeArray, newBlockNode)
 	// Create an entry for newBlock in BlockHashMap
 	childIndex := len(BlockNodeArray) - 1
-	BlockHashMap[newBlock.ThisHash] = childIndex
-	// Update the entry for newBlock's parent in BlockNodeArray
-	parentIndex := BlockHashMap[newBlock.PrevHash]
-	parentBlock := BlockNodeArray[i].Block
-	parentBlock.Children = append(parentBlock.Children, childIndex)
+	childHash := GetBlockHash(newBlock)
+	if VerifyBlock(newBlock) {
+		BlockHashMap[childHash] = childIndex
+		// Update the entry for newBlock's parent in BlockNodeArray
+		parentIndex := BlockHashMap[newBlock.PrevHash]
+		parentBlock := BlockNodeArray[parentIndex].Block
+		parentBlock.Children = append(parentBlock.Children, childIndex)
+		return nil
+	} else {
+		err = fmt.Errorf("block hash does not match up with block contents")
+		return err
+	}
 }
 
 // Do we need this?
@@ -216,6 +224,22 @@ func GetBlockChildren(blockHash string) []blockchain.Block {
 	return children
 }
 
+func GetBlockHash(block blockchain.Block) string {
+	h := md5.New()
+	hashIn := pow.Stringify(block) + block.Nonce
+	h.Write([]byte(hashIn))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func VerifyBlock(block blockchain.Block) bool {
+	hash := GetBlockHash(block)
+	if len(block.OpHistory) == 0 {
+		return pow.Verify(hash, MinerInstance.Settings.PoWDifficultyNoOpBlock)
+	} else { 
+		return pow.Verify(hash, MinerInstance.Settings.PoWDifficultyOpBlock)
+	}
+}
+
 /*******************************
 | Server Management functions
 ********************************/
@@ -232,7 +256,7 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 	var ignored bool
 	fmt.Println("ServerHeartBeat::Sending heartbeat")
 	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
-	if CheckError(err, "ServerHeartBeat"){
+	if CheckError(err, "ServerHeartBeat") {
 		//Reconnect to server if timed out
 		msi.Register(MinerInstance.Addr)
 	}
@@ -246,17 +270,17 @@ func (msi *MinerServerInterface) GetPeers() {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
 			LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
-			if CheckError(err, "GetPeers:ResolvePeerAddr"){
+			if CheckError(err, "GetPeers:ResolvePeerAddr") {
 				continue
 			}
 
 			PeerAddr, err := net.ResolveTCPAddr("tcp", addr.String())
-			if CheckError(err, "GetPeers:ResolveLocalAddr"){
+			if CheckError(err, "GetPeers:ResolveLocalAddr") {
 				continue
 			}
 
 			conn, err := net.DialTCP("tcp", LocalAddr, PeerAddr)
-			if CheckError(err, "GetPeers:DialTCP"){
+			if CheckError(err, "GetPeers:DialTCP") {
 				continue
 			}
 
@@ -264,7 +288,7 @@ func (msi *MinerServerInterface) GetPeers() {
 
 			args := ConnectArgs{conn.LocalAddr().String()}
 			err = client.Call("Peer.Connect", args, &empty)
-			if CheckError(err, "GetPeers:Connect"){
+			if CheckError(err, "GetPeers:Connect") {
 				continue
 			}
 
