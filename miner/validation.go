@@ -8,7 +8,7 @@ import (
 
 const LOG_VALIDATION = true
 
-// Function used to determine if an operation is allowed on the blockchain.
+// Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
 		pubkey string) error {
 	if LOG_VALIDATION {
@@ -52,7 +52,7 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 
 			subarr := path.SubArray()
 
-			if block.OpHistory[j].PubKey != pubkey {
+			if op.PubKey != pubkey {
 				pixelarr.MergeSubArray(subarr)
 			} else {
 				// Don't fill in the pixels for the same pubkey,
@@ -77,6 +77,10 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 		}
 	}
 
+	// TODO: check ink of the public key for any operations currently in
+	// progress; a pubkey may have more than one op in progress of being
+	// put into the blockchain at a given time.
+
 	if inkRequired > int(pubkeyInk) {
 		fmt.Println("checkInkAndConflicts: insufficient ink")
 		return fmt.Errorf("insufficient ink")
@@ -85,6 +89,50 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 	if pixelarr.HasConflict(subarr) {
 		fmt.Println("checkInkAndConflicts: conflict found")
 		return fmt.Errorf("conflict found")
+	}
+
+	return nil
+}
+
+// Function used to determine if a delete operation is allowed on the blockchain.
+func (m Miner) checkDeletion(sHash string, pubkey string) error {
+	if LOG_VALIDATION {
+		fmt.Println("checkInkAndConflicts called")
+	}
+
+	// FIXME: this should be the miner's block data structure.
+	// TODO: Need to figure out exactly what to check. There could be multiple
+	// longest paths. It could be that there is a conflict on one and
+	// not the other. Need to think about this one carefully.
+	blocks := make([]blockchain.Block, 0)
+
+	delAllowed := false
+
+	// Iterate over all blocks in this structure to check if the shape has
+	// actually been added. If shape is found to be added, cannot break out
+	// of loop immediately - need to check if delete was already done also.
+	// If a delete was done, can break out of loop and return an error.
+	for i := 0; i < len(blocks); i++ {
+		block := blocks[i]
+
+		for j := 0; j < len(block.OpHistory); j++ {
+			op := block.OpHistory[j]
+
+			if op.PubKey == pubkey && op.ShapeHash == sHash {
+				if op.OpType == blockchain.ADD {
+					delAllowed = true
+				} else {
+					delAllowed = false
+					goto breakOuterLoop
+				}
+			}
+		}
+	}
+
+	breakOuterLoop:
+
+	if !delAllowed {
+		return fmt.Errorf("Delete operation not allowed")
 	}
 
 	return nil

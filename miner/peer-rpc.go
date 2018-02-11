@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
-	"os"
 	"../blockchain"
 	"../shapelib"
 	"../utils"
@@ -31,34 +30,31 @@ import (
 * TYPE_DEFINITIONS *
 *******************/
 
-// Struct for maintaining state of the peerRpc
-type peerRpc struct {
+// Struct for maintaining state of the PeerRpc
+type PeerRpc struct {
 	miner *Miner
-
-	// Param blocksPublished is a map used as a set data structure. It
-	// stores the blockhash as a string. Any received blockhash that is
-	// found to be in this set is assumed to already have been published to
-	// peers, and will not be published again. This is in order to avoid
-	// broadcast loops.
-	blocksPublished map[string]empty
+	opCh  chan PropagateOpArgs
+	blkCh chan PropagateBlockArgs
 }
 
 // Empty struct. Use for filling required but unused function parameters.
-type empty struct{}
+type Empty struct{}
 
-type connectArgs struct {
-	peer_addr string
+type ConnectArgs struct {
+	Peer_addr string
 }
 
-type propagateOpArgs struct {
-	op blockchain.Operation
+type PropagateOpArgs struct {
+	Op blockchain.Operation
+	TTL int
 }
 
-type propagateBlockArgs struct {
-	block blockchain.Block
+type PropagateBlockArgs struct {
+	Block blockchain.Block
+	TTL int
 }
 
-type getBlockChainArgs struct {
+type GetBlockChainArgs struct {
 	blockChain []blockchain.Block
 }
 
@@ -70,17 +66,18 @@ type getBlockChainArgs struct {
 // requesting connect will be added to the maintained peer count. There will
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
-func (p *peerRpc) Connect(args *connectArgs, reply *empty) error {
-	fmt.Println("Connect called")
+func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
+	fmt.Println("Connect called by: ", args.Peer_addr)
 
 	// - Add the peer miner to list of connected peers.
 	// - Start a heartbeat for the new miner.
+
 
 	return nil
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
-func (p *peerRpc) Hb(args *empty, reply *empty) error {
+func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
 	fmt.Println("Hb called")
 	return nil
 }
@@ -108,11 +105,13 @@ var validateOpLock sync.Mutex
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
+func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	fmt.Println("PropagateOp called")
 
+	// TODO: Validate the shapehash using the public key
+
 	// Get the shapelib.Path representation for this svg path
-	path, err := p.miner.getPathFromOp(args.op)
+	path, err := p.miner.getPathFromOp(args.Op)
 	if err != nil {
 		return err
 	}
@@ -122,14 +121,18 @@ func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
 	subarr := path.SubArray()
 
 	var inkRequired int
-	if args.op.Fill != "transparent" {
+	if args.Op.Fill != "transparent" {
 		inkRequired = path.TotalLength()
 	} else {
 		inkRequired = subarr.PixelsFilled()
 	}
 
 	validateOpLock.Lock()
-	err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.op.PubKey)
+	if args.Op.OpType == blockchain.ADD {
+		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.Op.PubKey)
+	} else {
+		err = p.miner.checkDeletion(args.Op.ShapeHash, args.Op.PubKey)
+	}
 	validateOpLock.Unlock()
 
 	if err != nil {
@@ -137,27 +140,39 @@ func (p *peerRpc) PropagateOp(args *propagateOpArgs, reply *empty) error {
 	}
 
 	// - Update the solver.
-	// - Propagate op to list of connected peers.
+
+	// Propagate op to list of connected peers.
+	// TODO: figure out a way to optimize this... don't want to revalidate ops and stuff
+	args.TTL--
+	if args.TTL > 0 {
+		p.opCh <- args
+	}
 
 	return nil
 }
 
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p *peerRpc) PropagateBlock(args *propagateBlockArgs, reply *empty) error {
+func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
 	// - Validate the block
 	// - Add block to block chain.
 	// - Update the solver
-	// - Propagate block to list of connected peers.
+
+	// Propagate block to list of connected peers.
+	// TODO: figure out a way to optimize this... don't want to revalidate blocks all the time
+	args.TTL--
+	if args.TTL > 0 {
+		p.blkCh <- args
+	}
 
 	return nil
 }
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p *peerRpc) GetBlockChain(args *empty, reply *getBlockChainArgs) error {
+func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
 
 	// Return a flattened version of the blockchain from somewhere
@@ -166,17 +181,14 @@ func (p *peerRpc) GetBlockChain(args *empty, reply *getBlockChainArgs) error {
 }
 
 // This will initialize the miner peer listener.
-func listenPeerRpc(addr string, miner *Miner) {
-	pRpc := peerRpc{miner, make(map[string]empty)}
+func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
+		blkCh chan PropagateBlockArgs) {
+	pRpc := PeerRpc{miner, opCh, blkCh}
 
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		fmt.Println("Peer RPC could not initialize tcp listener")
-		os.Exit(1)
-	}
+	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
 	server := rpc.NewServer()
 	server.RegisterName("Peer", pRpc)
 
-	server.Accept(conn)
+	server.Accept(ln)
 }
