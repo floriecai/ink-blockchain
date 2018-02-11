@@ -1,4 +1,4 @@
-package inkcoin
+package blockchain
 
 type OpType int
 
