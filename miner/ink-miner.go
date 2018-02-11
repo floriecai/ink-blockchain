@@ -17,7 +17,7 @@ import (
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
-	"../pow"
+	//"../pow"
 )
 
 // Our singleton miner instance
@@ -59,6 +59,9 @@ type MinerInfo struct {
 	Key     ecdsa.PublicKey
 }
 
+type LibMinerInterface struct {
+
+}
 
 type MinerServerInterface struct {
 	Client *rpc.Client
@@ -171,8 +174,8 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 
 func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
     if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		children := GetBlockChildren(req.BlockHash)
-		response.Blocks = children
+		//children := GetBlockChildren(req.BlockHash)
+		//response.Blocks = children
         return nil
     } else {
         err = fmt.Errorf("invalid user")
@@ -183,7 +186,7 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 /*******************************
 | Blockchain functions
 ********************************/
-
+/*
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
 	// Create a new node for newBlock and append it to BlockNodeArray
@@ -236,7 +239,7 @@ func VerifyBlock(block blockchain.Block) bool {
 		return pow.Verify(hash, MinerInstance.Settings.PoWDifficultyOpBlock)
 	}
 }
-
+*/
 /*******************************
 | Server Management functions
 ********************************/
