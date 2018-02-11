@@ -1,8 +1,3 @@
-const (
-	ADD int = iota
-	DELETE
-)
-
 type OpType int
 
 const (
