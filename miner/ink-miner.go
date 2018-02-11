@@ -60,9 +60,6 @@ type MinerInfo struct {
 }
 
 
-type MinerMinerInterface struct {
-}
-
 type MinerServerInterface struct {
 	Client *rpc.Client
 }
@@ -93,7 +90,6 @@ func (m *Miner) ConnectToServer(ip string) {
 	miner_server_int.Client = client
 	m.MSI = miner_server_int
 }
-
 /*******************************
 | Lib->Miner RPC functions
 ********************************/
@@ -257,7 +253,7 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 	var ignored bool
 	fmt.Println("ServerHeartBeat::Sending heartbeat")
 	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
-	if CheckError(err, "ServerHeartBeat") {
+	if CheckError(err, "ServerHeartBeat"){
 		//Reconnect to server if timed out
 		msi.Register(MinerInstance.Addr)
 	}
@@ -271,17 +267,17 @@ func (msi *MinerServerInterface) GetPeers() {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
 			LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
-			if CheckError(err, "GetPeers:ResolvePeerAddr") {
+			if CheckError(err, "GetPeers:ResolvePeerAddr"){
 				continue
 			}
 
 			PeerAddr, err := net.ResolveTCPAddr("tcp", addr.String())
-			if CheckError(err, "GetPeers:ResolveLocalAddr") {
+			if CheckError(err, "GetPeers:ResolveLocalAddr"){
 				continue
 			}
 
 			conn, err := net.DialTCP("tcp", LocalAddr, PeerAddr)
-			if CheckError(err, "GetPeers:DialTCP") {
+			if CheckError(err, "GetPeers:DialTCP"){
 				continue
 			}
 
@@ -289,7 +285,7 @@ func (msi *MinerServerInterface) GetPeers() {
 
 			args := ConnectArgs{conn.LocalAddr().String()}
 			err = client.Call("Peer.Connect", args, &empty)
-			if CheckError(err, "GetPeers:Connect") {
+			if CheckError(err, "GetPeers:Connect"){
 				continue
 			}
 
@@ -308,7 +304,7 @@ func (msi *MinerServerInterface) GetPeers() {
 // 5. When a operation or block is sent through the channel, heartbeat will be replaced by Propagate<Type>
 // This is the central point of control for the peer connectivity
 func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Block) {
-	// Send heartbeats three times every timeout interval to be safe
+	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 3)
 	heartbeat := time.Tick(interval * time.Millisecond)
 	for {
@@ -436,14 +432,12 @@ func main() {
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
-
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 	// Listening Address
 	ln, _ := net.Listen("tcp", ":0")
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
-
 	// 2. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance)
 
