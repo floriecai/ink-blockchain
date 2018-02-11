@@ -68,6 +68,8 @@ func (m *Miner) ConnectToServer(ip string) {
 	conn, err := net.DialTCP("tcp", LocalAddr, ServerAddr)
 	CheckError(err, "ConnectToServer:DialTCP")
 
+	fmt.Println("ConnectToServer::connecting to server on:", conn.LocalAddr().String())
+
 	client := rpc.NewClient(conn)
 	miner_server_int.Client = client
 	m.MSI = miner_server_int
@@ -171,31 +173,46 @@ func (msi *MinerServerInterface) Register(minerAddr net.Addr) {
 
 func (msi *MinerServerInterface) ServerHeartBeat() {
 	var ignored bool
+	fmt.Println("ServerHeartBeat::Sending heartbeat")
 	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
-	CheckError(err, "ServerHeartBeat")
+	if CheckError(err, "ServerHeartBeat"){
+		//Reconnect to server if timed out
+		msi.Register(MinerInstance.Addr)
+	}
 }
 
 func (msi *MinerServerInterface) GetPeers() {
 	var addrSet []net.Addr
-	var empty empty
+	var empty Empty
 	msi.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
 	for _, addr := range addrSet {
-		fmt.Println("Calling address: ", addr.String(), "\n")
-		LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
-		CheckError(err, "GetPeers:ResolvePeerAddr")
+		if _, ok := PeerList[addr.String()]; !ok {
+			fmt.Println("GetPeers::Connecting to address: ", addr.String())
+			LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
+			if CheckError(err, "GetPeers:ResolvePeerAddr"){
+				continue
+			}
 
-		PeerAddr, err := net.ResolveTCPAddr("tcp", addr.String())
-		CheckError(err, "GetPeers:ResolveLocalAddr")
+			PeerAddr, err := net.ResolveTCPAddr("tcp", addr.String())
+			if CheckError(err, "GetPeers:ResolveLocalAddr"){
+				continue
+			}
 
-		conn, err := net.DialTCP("tcp", LocalAddr, PeerAddr)
-		CheckError(err, "GetPeers:DialTCP")
+			conn, err := net.DialTCP("tcp", LocalAddr, PeerAddr)
+			if CheckError(err, "GetPeers:DialTCP"){
+				continue
+			}
 
-		client := rpc.NewClient(conn)
+			client := rpc.NewClient(conn)
 
-		err = client.Call("peerRPC.Connect", LocalAddr.String(), &empty)
-		CheckError(err, "GetPeers:Connect")
+			args := ConnectArgs{LocalAddr.String()}
+			err = client.Call("Peer.Connect", args, &empty)
+			if CheckError(err, "GetPeers:Connect"){
+				continue
+			}
 
-		PeerList[addr.String()] = &Peer{client, time.Now()}
+			PeerList[addr.String()] = &Peer{client, time.Now()}
+		}
 	}
 }
 /*******************************
@@ -208,8 +225,8 @@ func (msi *MinerServerInterface) GetPeers() {
 // 4. Request new nodes from server and connect to them when peers drop too low
 // This is the central point of control for the peer connectivity
 func ManageConnections() {
-	// Send heartbeats at four times the timeout interval to be safe
-	interval := time.Duration(MinerInstance.Settings.HeartBeat / 4)
+	// Send heartbeats at three times the timeout interval to be safe
+	interval := time.Duration(MinerInstance.Settings.HeartBeat / 3)
 	heartbeat := time.Tick(interval * time.Millisecond)
 	for {
 		select {
@@ -228,14 +245,16 @@ func ManageConnections() {
 // Send a heartbeat call to each peer
 func PeerHeartBeats() {
 	for addr, peer := range PeerList {
-		empty := new(empty)
+		empty := new(Empty)
 		err := peer.Client.Call("Peer.Hb", &empty, &empty)
-		CheckError(err, "PeerHeartBeats:"+addr)
+		if !CheckError(err, "PeerHeartBeats:"+addr){
+			peer.LastHeartBeat = time.Now()
+		}
 	}
 }
 // Look through current active connections and delete them if they are not live
 func CheckLiveliness() {
-	interval := time.Duration(MinerInstance.Settings.HeartBeat)
+	interval := time.Duration(MinerInstance.Settings.HeartBeat) * time.Millisecond
 	for addr, peer := range PeerList {
 		if time.Since(peer.LastHeartBeat) > interval {
 			fmt.Println("Stale connection: ", addr, " deleting")
@@ -257,10 +276,12 @@ func Verify(msg []byte, sign []byte, R, S big.Int, privKey *ecdsa.PrivateKey) bo
 		return false
 	}
 }
-func CheckError(err error, parent string) {
+func CheckError(err error, parent string) bool {
 	if err != nil {
 		fmt.Println(parent, ":: found error! ", err)
+		return true
 	}
+	return false
 }
 
 func ExtractKeyPairs(pubKey, privKey string) {
@@ -299,20 +320,20 @@ func main() {
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
-
-	// TODO - Undo the hardcoding after we're done testing
-	ln, _ := net.Listen("tcp", ":8080")
-	addr := ln.Addr()
-
-	MinerInstance.Addr = addr
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
+	// Listening Address
+	ln, _ := net.Listen("tcp", ":0")
+	addr := ln.Addr()
+	MinerInstance.Addr = addr
+
+
+	// 2. Setup Miner-Miner Listener
+	go listenPeerRpc(ln, MinerInstance)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
-
-	// 2. Setup Miner-Miner Listener
 
 	// 3. Setup Miner Heartbeat Manager
 	// Change interval to 1000ms from 10ms
@@ -321,5 +342,5 @@ func main() {
 	// 4. Setup Problem Solving
 
 	// 5. Setup Client-Miner Listener (this thread)
-	OpenLibMinerConn(":8090")
+	OpenLibMinerConn(":0")
 }
