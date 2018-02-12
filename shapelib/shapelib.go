@@ -29,18 +29,18 @@ Public types and methods:
 	Point
 
 	Shape
-	  SubArray() -> PixelSubArray
-	  LineCost() -> int
+	  SubArray()        -> PixelSubArray
+	  SubArrayAndCost() -> int
 
 	Path
-	  SubArray()    -> PixelSubArray
-	  LineCost()    -> int
-	  TotalLength() -> int
+	  SubArray()        -> PixelSubArray
+	  TotalLength()     -> int
+	  SubArrayAndCost() -> int
 
 	Circle
-	  SubArray()      -> PixelSubArray
-	  LineCost()      -> int
-	  Circumference() -> int
+	  SubArray()        -> PixelSubArray
+	  Circumference()   -> int
+	  SubArrayAndCost() -> int
 
 
 This file in particular contains all type definitions and some misc. functions.
@@ -72,9 +72,10 @@ type Shape interface {
 	// a pixel array for this particular shape.
 	SubArray() PixelSubArray
 
-	// Returns the line cost of this shape. Intended use case is to get
-	// the ink cost of a shape that has fill = "transparent"
-	LineCost() int
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape, as well as the cost that
+	// is associated with the shape.
+	SubArrayAndCost() (subarr PixelSubArray, cost int)
 }
 
 // Represents the data of a Path SVG item.

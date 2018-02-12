@@ -82,6 +82,29 @@ func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
 	return nil
 }
 
+// Get a shape interface from an operation.
+func (m Miner)getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
+	pathlist, err := utils.GetParsedSVG(op.SVGOp)
+	if err == nil {
+		// Error is nil, should be parsable into shapelib.Path
+		path := utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
+			int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
+
+		return path[0], nil
+	}
+
+	// TODO: try parsing it as a circle
+	//circ, err := utils.GetParsedCirc(op.SVGOp)
+	//if err != nil {
+	//	fmt.Println("SVG string is neither circle nor path:", op.SVGOp)
+	//	return shapelib.Shape(shapelib.Circle{0, 0, 0, false}), err
+	//}
+
+	// FIXME: change for circle
+	circ := shapelib.NewCircle(0, 0, 0, false)
+	return circ, fmt.Errorf("Not a path or circle")
+}
+
 // Get a shapelib.Path from an operation
 func (m Miner)getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGOp)
@@ -98,10 +121,10 @@ func (m Miner)getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	return path[0], nil
 }
 
-// This lock is intended to be used so that only one operation will be in the
+// This lock is intended to be used so that only one op or block will be in the
 // validation procedure at any given point. This is to prevent race conditions
 // of multiple, conflicting operations.
-var validateOpLock sync.Mutex
+var validateLock sync.Mutex
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
@@ -111,35 +134,27 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	// TODO: Validate the shapehash using the public key
 
 	// Get the shapelib.Path representation for this svg path
-	path, err := p.miner.getPathFromOp(args.Op)
+	shape, err := p.miner.getShapeFromOp(args.Op)
 	if err != nil {
 		return err
 	}
 
-	// Get the subarr for checking conflicting shapes, as well as for computing area
-	// in the case that fill is not transparent.
-	subarr := path.SubArray()
+	subarr, inkRequired := shape.SubArrayAndCost()
 
-	var inkRequired int
-	if args.Op.Fill != "transparent" {
-		inkRequired = path.TotalLength()
-	} else {
-		inkRequired = subarr.PixelsFilled()
-	}
+	validateLock.Lock()
+	defer validateLock.Unlock()
 
-	validateOpLock.Lock()
 	if args.Op.OpType == blockchain.ADD {
 		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.Op.PubKey)
 	} else {
 		err = p.miner.checkDeletion(args.Op.ShapeHash, args.Op.PubKey)
 	}
-	validateOpLock.Unlock()
 
 	if err != nil {
 		return err
 	}
 
-	// - Update the solver.
+	// TODO: Update the solver.
 
 	// Propagate op to list of connected peers.
 	// TODO: figure out a way to optimize this... don't want to revalidate ops and stuff
@@ -160,8 +175,12 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	// - Add block to block chain.
 	// - Update the solver
 
+	validateLock.Lock()
+	defer validateLock.Unlock()
+
 	// Propagate block to list of connected peers.
 	// TODO: figure out a way to optimize this... don't want to revalidate blocks all the time
+
 	args.TTL--
 	if args.TTL > 0 {
 		p.blkCh <- args

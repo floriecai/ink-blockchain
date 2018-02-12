@@ -44,13 +44,13 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 
 		for j := 0; j < numOps; j++ {
 			op := block.OpHistory[j]
-			path, err := m.getPathFromOp(op)
+			path, err := m.getShapeFromOp(op)
 			if err != nil {
 				fmt.Println("CRITICAL ERROR, BAD OP IN BLOCKCHAIN");
 				continue
 			}
 
-			subarr := path.SubArray()
+			subarr, cost := path.SubArrayAndCost()
 
 			if op.PubKey != pubkey {
 				pixelarr.MergeSubArray(subarr)
@@ -58,14 +58,6 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 				// Don't fill in the pixels for the same pubkey,
 				// but compute the ink required in order to
 				// check if pubkey has sufficient ink.
-				var cost int
-
-				if op.Fill == "transparent" {
-					cost = path.LineCost()
-				} else {
-					cost = subarr.PixelsFilled()
-				}
-
 				// Don't bother validating that a DELETE has a
 				// corresponding ADD. Assume all are valid.
 				if op.OpType == blockchain.ADD {

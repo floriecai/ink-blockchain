@@ -159,9 +159,50 @@ func (p Path) TotalLength() int {
 	return int(sum + 0.5)
 }
 
-// Calls total length - use for matching the Shape interface.
-func (p Path) LineCost() int {
-	return p.TotalLength()
+// Compute total area using sum of cross products. Will not work for a path
+// that has a move in the middle of it.
+func (p Path) Area() int {
+	sum := float64(0)
+
+	for i := 0; i < len(p.Points)-1; i++ {
+		x1 := float64(p.Points[i].X)
+		x2 := float64(p.Points[i+1].X)
+		y1 := float64(p.Points[i].Y)
+		y2 := float64(p.Points[i+1].Y)
+
+		sum += x1*y2 - x2*y1
+	}
+
+	return int(math.Abs(sum) + 0.5)
+}
+
+// Returns the sub array for the path, as well as the cost. The cost is computed
+// as follows:
+// - If Filled == false, call TotalLength()
+// - Else
+//   - If path has no Points with Moved == true, compute area using standard
+//     polygon algorithm.
+//   - Else, compute the area using the bits filled into the PixelSubArray
+func (p Path) SubArrayAndCost() (PixelSubArray, int) {
+	subarr := p.SubArray()
+
+	if !p.Filled {
+		return subarr, p.TotalLength()
+	}
+
+	hasMoved := false
+	for i := 0; i < len(p.Points); i++ {
+		if p.Points[i].Moved {
+			hasMoved = true
+			break
+		}
+	}
+
+	if hasMoved {
+		return subarr, subarr.PixelsFilled()
+	} else {
+		return subarr, p.Area()
+	}
 }
 
 /* CIRCLE_FUNCTIONS */
@@ -175,11 +216,6 @@ func NewCircle(xc, yc, radius int, filled bool) Circle {
 // Compute 2pi * r
 func (c Circle) Circumference() int {
 	return int((math.Pi * float64(c.R) * 2.0) + 0.5)
-}
-
-// Calls Circumference(). Used to match Shape {} interface.
-func (c Circle) LineCost() int {
-	return c.Circumference()
 }
 
 // Return a PixelSubArray representing the Circle
@@ -214,4 +250,21 @@ func (c Circle) SubArray() PixelSubArray {
 	}
 
 	return sub
+}
+
+// Compute pi * r^2
+func (c Circle) Area() int {
+	floatR := float64(c.R)
+	return int(math.Pi * floatR * floatR + 0.5)
+}
+
+// Return subarray and cost of the circle.
+func (c Circle) SubArrayAndCost() (PixelSubArray, int) {
+	subarr := c.SubArray()
+
+	if c.Filled {
+		return subarr, c.Area()
+	} else {
+		return subarr, c.Circumference()
+	}
 }
