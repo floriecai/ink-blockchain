@@ -398,8 +398,16 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 	for {
 		select {
 		case op := <- sop:
+			// Received an op from somewhere
+			// Assuming it is properly validated
+			// Add it to the block we were working on
+			// reissue job
 			fmt.Println("got new op to hash:", op)
 		case block := <- sblock:
+			// Received a block from somewhere
+			// Assume that this block was validated
+			// Assume this is the next block to build off of
+			// Reissue a job with this blockhash as prevBlock
 			fmt.Println("got new block to hash:", block)
 		case sol := <- solved:
 			fmt.Println("got a solution:", sol)
