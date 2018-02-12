@@ -655,8 +655,11 @@ func main() {
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
+
+	//Initialize the hash map and the block node array with the genesis block
 	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
 	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
+
 	// 3. Setup Miner Heartbeat Manager
 	pop := make(chan blockchain.Operation)
 	pblock := make(chan blockchain.Block)
