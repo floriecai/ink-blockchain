@@ -140,20 +140,20 @@ func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libmin
 			}
 		}
 		return nil
-	} else {
-		err = fmt.Errorf("invalid user")
-		return err
 	}
+
+	err = fmt.Errorf("invalid user")
+	return err
 }
 
 func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		return nil
-	} else {
-		err = fmt.Errorf("invalid user")
-		return err
 	}
+
+	err = fmt.Errorf("invalid user")
+	return err
 }
 
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
@@ -194,31 +194,43 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 
 		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
-	} else {
-		err = fmt.Errorf("invalid user")
-		return err
 	}
+	err = fmt.Errorf("invalid user")
+	return err
+
 }
 
 func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		response.InkRemaining = uint32(MinerInstance.InkAmt)
-		fmt.Println("deletion is currently unimplemented, sorry!")
-		return nil
-	} else {
-		err = fmt.Errorf("invalid user")
-		return err
+		var deleteReq libminer.DeleteRequest
+		json.Unmarshal(req.Msg, &deleteReq)
+
+		blockChain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+
+		for _, block := range blockChain {
+			for _, shapeOp := range block.OpHistory {
+				if shapeOp.ShapeHash == deleteReq.ShapeHash {
+					// TODO fcai
+					// Need to have enough blocks following.
+					response.InkRemaining = uint32(MinerInstance.InkAmt)
+					return nil
+				}
+			}
+		}
+		return libminer.ShapeOwnerError(deleteReq.ShapeHash)
 	}
+
+	err = fmt.Errorf("invalid user")
+	return err
 }
 
 func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		*response = MinerInstance.Settings.GenesisBlockHash
 		return nil
-	} else {
-		err = fmt.Errorf("invalid user")
-		return err
 	}
+	err = fmt.Errorf("invalid user")
+	return err
 }
 
 func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
@@ -226,10 +238,9 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 		//children := GetBlockChildren(req.BlockHash)
 		//response.Blocks = children
 		return nil
-	} else {
-		err = fmt.Errorf("invalid user")
-		return err
 	}
+	err = fmt.Errorf("invalid user")
+	return err
 }
 
 /*******************************
@@ -252,10 +263,9 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 		parentBlockNode := BlockNodeArray[parentIndex]
 		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
 		return nil
-	} else {
-		err = fmt.Errorf("Block hash does not match up with block contents!")
-		return err
 	}
+	err = fmt.Errorf("Block hash does not match up with block contents!")
+	return err
 }
 
 // Do we need this?
@@ -549,6 +559,36 @@ func ExtractKeyPairs(pubKey, privKey string) {
 
 func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
+}
+
+// Returns an array of Blocks that are on the longest path
+func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) []blockchain.Block {
+	blockChain := make([]blockchain.Block, 0)
+
+	initBIndex := blockHashMap[initBlockHash]
+	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
+
+	if len(blockNodeArray[initBIndex].Children) == 0 {
+		return blockChain
+	}
+
+	var longestPath []blockchain.Block
+	maxLen := -1
+
+	for _, childIndex := range blockNodeArray[initBIndex].Children {
+		child := blockNodeArray[childIndex]
+
+		childHash := GetBlockHash(child.Block)
+		childPath := GetLongestPath(childHash, blockHashMap, blockNodeArray)
+		if maxLen < len(childPath) {
+			maxLen = len(childPath)
+			longestPath = childPath
+		}
+	}
+
+	blockChain = append(blockChain, longestPath...)
+	return blockChain
+
 }
 
 func GetBlockHash(block blockchain.Block) string {
