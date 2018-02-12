@@ -8,34 +8,52 @@ import (
 	"crypto/x509"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"net/rpc"
 	"os"
 	"time"
+	"../blockchain"
 	"../libminer"
 	"../minerserver"
-	"../blockchain"
+	"../pow"
 )
 
 // Our singleton miner instance
 var MinerInstance *Miner
 
-//Primitive representation of active art miners
+// Primitive representation of active art miners
 var ArtNodeList map[int]bool = make(map[int]bool)
 
-//List of peers WE connect TO, not peers that connect to US
+// List of peers WE connect TO, not peers that connect to US
 var PeerList map[string]*Peer = make(map[string]*Peer)
 
-//Global TTL of propagate requests
-var TTL int = 100
+
+const (
+	// Global TTL of propagate requests
+	TTL = 100
+	// Maximum threads we will use for problem solving
+	MAX_THREADS = 4
+)
+
+// Global block chain array
+var BlockNodeArray []blockchain.BlockNode
+
+// Global block chain search map
+// Key: The hash of a block
+// Val: The index of block with such hash in BlockNodeArray
+var BlockHashMap map[string]int = make(map[string]int)
+
+// Current Job ID
+var CurrJobId int = 0
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
 ********************************/
 type Miner struct {
-	CurrJobId int
 	PrivKey   *ecdsa.PrivateKey
 	Addr      net.Addr
 	Settings  minerserver.MinerNetSettings
@@ -50,6 +68,7 @@ type MinerInfo struct {
 }
 
 type LibMinerInterface struct {
+
 }
 
 type MinerServerInterface struct {
@@ -60,6 +79,7 @@ type Peer struct {
 	Client 			*rpc.Client
 	LastHeartBeat 	time.Time
 }
+
 /*******************************
 | Miner functions
 ********************************/
@@ -85,7 +105,7 @@ func (m *Miner) ConnectToServer(ip string) {
 | Lib->Miner RPC functions
 ********************************/
 
-//Setup an interface that implements rpc calls for the lib
+// Setup an interface that implements rpc calls for the lib
 func OpenLibMinerConn(ip string) {
 	lib_miner_int := new(LibMinerInterface)
 
@@ -150,12 +170,6 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 	}
 }
 
-/* TODO
-func (lmi *Lib_Miner_Interface) GetBlockChain(hello *libminer.Request, response *[]Block) (err error) {
-	return nil
-}
-*/
-
 func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		*response = MinerInstance.Settings.GenesisBlockHash
@@ -163,6 +177,68 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 	} else {
 		err = fmt.Errorf("invalid user")
 		return err
+	}
+}
+
+func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
+    if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		//children := GetBlockChildren(req.BlockHash)
+		//response.Blocks = children
+        return nil
+    } else {
+        err = fmt.Errorf("invalid user")
+        return err
+    }
+}
+
+/*******************************
+| Blockchain functions
+********************************/
+
+// Appends the new block to BlockArray and updates BlockHashMap
+func InsertBlock(newBlock blockchain.Block) (err error) {
+	// Create a new node for newBlock and append it to BlockNodeArray
+	newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
+	BlockNodeArray = append(BlockNodeArray, newBlockNode)
+
+	// Create an entry for newBlock in BlockHashMap
+	childIndex := len(BlockNodeArray) - 1
+	childHash := GetBlockHash(newBlock)
+	if VerifyBlock(newBlock) {
+		BlockHashMap[childHash] = childIndex
+		// Update the entry for newBlock's parent in BlockNodeArray
+		parentIndex := BlockHashMap[newBlock.PrevHash]
+		parentBlockNode := BlockNodeArray[parentIndex]
+		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		return nil
+	} else {
+		err = fmt.Errorf("Block hash does not match up with block contents!")
+		return err
+	}
+}
+
+// Do we need this?
+// It seems like the only block individually retrieved is the GenesisBlock
+func GetBlock(blockHash string) blockchain.Block {
+	index := BlockHashMap[blockHash]
+	return BlockNodeArray[index].Block
+}
+
+func GetBlockChildren(blockHash string) []blockchain.Block {
+	var children []blockchain.Block
+	parentIndex := BlockHashMap[blockHash]
+	for _, childIndex := range BlockNodeArray[parentIndex].Children {
+		children = append(children, BlockNodeArray[childIndex].Block)
+	}
+	return children
+}
+
+func VerifyBlock(block blockchain.Block) bool {
+	hash := GetBlockHash(block)
+	if len(block.OpHistory) == 0 {
+		return pow.Verify(hash, int(MinerInstance.Settings.PoWDifficultyNoOpBlock))
+	} else { 
+		return pow.Verify(hash, int(MinerInstance.Settings.PoWDifficultyOpBlock))
 	}
 }
 
@@ -180,7 +256,7 @@ func (msi *MinerServerInterface) Register(minerAddr net.Addr) {
 
 func (msi *MinerServerInterface) ServerHeartBeat() {
 	var ignored bool
-	fmt.Println("ServerHeartBeat::Sending heartbeat")
+	//fmt.Println("ServerHeartBeat::Sending heartbeat")
 	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
 	if CheckError(err, "ServerHeartBeat"){
 		//Reconnect to server if timed out
@@ -234,7 +310,7 @@ func (msi *MinerServerInterface) GetPeers() {
 // This is the central point of control for the peer connectivity
 func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Block) {
 	// Send heartbeats at three times the timeout interval to be safe
-	interval := time.Duration(MinerInstance.Settings.HeartBeat / 3)
+	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
 	for {
 		select {
@@ -303,6 +379,86 @@ func CheckLiveliness() {
 		}
 	}
 }
+
+/*******************************
+| Crypto-Management
+********************************/
+// The problemsolver handles 4 main functions
+// 1. Spins new workers for a new job
+// 2. Kills old workers for a new job
+// 3. Receive job updates via the given channels
+// 4. TODO: Return solution
+
+func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
+	solved := make(chan blockchain.Block)
+
+	// Channel returned by a job call that can kill the workers for that particular job
+	var done chan bool
+
+	for {
+		select {
+		case op := <- sop:
+			// Received an op from somewhere
+			// Assuming it is properly validated
+			// Add it to the block we were working on
+			// reissue job
+			fmt.Println("got new op to hash:", op)
+		case block := <- sblock:
+			// Received a block from somewhere
+			// Assume that this block was validated
+			// Assume this is the next block to build off of
+			// Reissue a job with this blockhash as prevBlock
+			fmt.Println("got new block to hash:", block)
+		case sol := <- solved:
+			fmt.Println("got a solution:", sol)
+
+			// Kill current job
+			close(done)
+			close(solved)
+			// Make a new channel
+			solved = make(chan blockchain.Block)
+			// Insert block into our data structure
+			InsertBlock(sol)
+			done = NoopJob(GetBlockHash(sol), solved)
+		default:
+			if CurrJobId == 0 {
+				fmt.Println("Initiating the first job")
+				done = NoopJob(MinerInstance.Settings.GenesisBlockHash, solved)
+			}
+			// Wait for current job to change
+		}
+	}
+}
+
+// Initiate a job with an empty op array and a blockhash
+func NoopJob(hash string, solved chan blockchain.Block) (chan bool){
+	block := blockchain.Block{PrevHash: hash,
+		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
+	done := make(chan bool)
+	for i := 0; i <= MAX_THREADS; i++ {
+		CurrJobId++
+		// Split up the start by the maximum number of threads we allow
+		start := math.MaxUint32/MAX_THREADS * i
+		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyNoOpBlock, uint32(start), solved, done)
+	}
+	return done
+}
+
+// Initiate the a job with a predefined op array
+func OpJob(hash string, Ops []blockchain.Operation, solved chan blockchain.Block) (chan bool){
+	block := blockchain.Block{PrevHash: hash,
+		OpHistory: Ops,
+		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
+	done := make(chan bool)
+	for i := 0; i <= MAX_THREADS; i++ {
+		CurrJobId++
+		// Split up the start by the maximum number of threads we allow
+		start := math.MaxUint32/MAX_THREADS * i
+		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyOpBlock, uint32(start), solved, done)
+	}
+	return done
+}
+
 /*******************************
 | Helpers
 ********************************/
@@ -351,6 +507,15 @@ func ExtractKeyPairs(pubKey, privKey string) {
 func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
 }
+
+func GetBlockHash(block blockchain.Block) string {
+	h := md5.New()
+	bytes, _ := json.Marshal(block)
+	h.Write(bytes)
+	hash := hex.EncodeToString(h.Sum(nil))
+	return hash
+}
+
 /*******************************
 | Main
 ********************************/
@@ -367,21 +532,24 @@ func main() {
 	ln, _ := net.Listen("tcp", ":0")
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
-
-
 	// 2. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
+	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
 
+	// 3. Setup Miner Heartbeat Manager
 	pop := make(chan blockchain.Operation)
 	pblock := make(chan blockchain.Block)
-	// 3. Setup Miner Heartbeat Manager
 	go ManageConnections(pop, pblock)
 
+
 	// 4. Setup Problem Solving
+	sop := make(chan blockchain.Operation)
+	sblock := make(chan blockchain.Block)
+	go ProblemSolver(sop, sblock)
 
 	// 5. Setup Client-Miner Listener (this thread)
 	OpenLibMinerConn(":0")

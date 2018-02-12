@@ -2,9 +2,7 @@ package libminer
 
 import (
 	"math/big"
-
-	"crypto/ecdsa"
-
+	"../blockchain"
 	"../shapelib"
 )
 
@@ -41,6 +39,11 @@ type RegisterRequest struct {
 	Msg []byte
 }
 
+type BlockRequest struct {
+    Id        int
+    BlockHash string
+}
+
 //////////////////////////Response msgs
 type RegisterResponse struct {
 	Id         int
@@ -59,14 +62,6 @@ type DrawResponse struct {
 	InkRemaining uint32
 }
 
-// TODO: This is currently insufficient for our blockchain, need to make it better, add it to a different lib
-type Block struct {
-	PrevHash    string
-	ReqRecord   []Request
-	MinerPubKey ecdsa.PublicKey
-	nonce       uint32
-}
-
 type BlocksResponse struct {
-	Blocks []Block
+	Blocks []blockchain.Block
 }
