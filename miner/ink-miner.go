@@ -200,6 +200,7 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 	// Create a new node for newBlock and append it to BlockNodeArray
 	newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
 	BlockNodeArray = append(BlockNodeArray, newBlockNode)
+
 	// Create an entry for newBlock in BlockHashMap
 	childIndex := len(BlockNodeArray) - 1
 	childHash := GetBlockHash(newBlock)
@@ -207,11 +208,11 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 		BlockHashMap[childHash] = childIndex
 		// Update the entry for newBlock's parent in BlockNodeArray
 		parentIndex := BlockHashMap[newBlock.PrevHash]
-		parentBlock := BlockNodeArray[parentIndex]
-		parentBlock.Children = append(parentBlock.Children, childIndex)
+		parentBlockNode := BlockNodeArray[parentIndex]
+		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
 		return nil
 	} else {
-		err = fmt.Errorf("block hash does not match up with block contents")
+		err = fmt.Errorf("Block hash does not match up with block contents!")
 		return err
 	}
 }
@@ -406,11 +407,11 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 			// Kill current job
 			close(done)
 			close(solved)
-
 			// Make a new channel
 			solved = make(chan blockchain.Block)
-			// TODO: add block to our new data structures
-			// TODO: start a noop block chain
+			// Insert block into our data structure
+			InsertBlock(sol)
+			done = NoopJob(GetBlockHash(sol), solved)
 		default:
 			if CurrJobId == 0 {
 				fmt.Println("Initiating the first job")
