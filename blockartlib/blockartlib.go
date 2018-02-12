@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	MAX_SVG_LEN = 128
 	TRANSPARENT = "transparent"
 )
 
@@ -214,15 +213,12 @@ type CanvasT struct {
 // - ShapeOverlapError
 // - OutOfBoundsError
 func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgString string, fill string, stroke string) (shapeHash string, blockHash string, inkRemaining uint32, err error) {
-	paths, err := utils.GetParsedSVG(shapeSvgString)
-
-	if err != nil {
-		return "", "", 0, err
-	}
-
-	shapelibPaths := utils.SVGToPoints(paths, int(canvas.Settings.CanvasXMax), int(canvas.Settings.CanvasYMax), fill != TRANSPARENT)
-
-	drawRequest := libminer.DrawRequest{Id: canvas.Id, ValidateNum: validateNum, SVG: shapelibPaths}
+	drawRequest := libminer.DrawRequest{
+		Id:          canvas.Id,
+		ValidateNum: validateNum,
+		SVGString:   shapeSvgString,
+		Fill:        fill,
+		Stroke:      stroke}
 	msg, _ := json.Marshal(drawRequest)
 	req := getRPCRequest(msg, &canvas.PrivKey)
 

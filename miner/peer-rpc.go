@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
+
 	"../blockchain"
 )
 
@@ -30,7 +31,7 @@ import (
 // Struct for maintaining state of the PeerRpc
 type PeerRpc struct {
 	miner *Miner
-	
+
 	// Param blocksPublished is a map used as a set data structure. It
 	// stores the blockhash as a string. Any received blockhash that is
 	// found to be in this set is assumed to already have been published to
@@ -47,13 +48,13 @@ type ConnectArgs struct {
 }
 
 type PropagateOpArgs struct {
-	op blockchain.Operation
+	op  blockchain.Operation
 	TTL int
 }
 
 type PropagateBlockArgs struct {
 	block blockchain.Block
-	TTL int
+	TTL   int
 }
 
 type GetBlockChainArgs struct {
@@ -73,7 +74,6 @@ func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
 
 	// - Add the peer miner to list of connected peers.
 	// - Start a heartbeat for the new miner.
-
 
 	return nil
 }

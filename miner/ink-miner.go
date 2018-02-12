@@ -16,10 +16,16 @@ import (
 	"net/rpc"
 	"os"
 	"time"
+
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
 	"../pow"
+	"../utils"
+)
+
+const (
+	TRANSPARENT = "transparent"
 )
 
 // Our singleton miner instance
@@ -30,7 +36,6 @@ var ArtNodeList map[int]bool = make(map[int]bool)
 
 // List of peers WE connect TO, not peers that connect to US
 var PeerList map[string]*Peer = make(map[string]*Peer)
-
 
 const (
 	// Global TTL of propagate requests
@@ -49,17 +54,19 @@ var BlockHashMap map[string]int = make(map[string]int)
 
 // Current Job ID
 var CurrJobId int = 0
+
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
 ********************************/
 type Miner struct {
-	PrivKey   *ecdsa.PrivateKey
-	Addr      net.Addr
-	Settings  minerserver.MinerNetSettings
-	InkAmt    int
-	LMI       *LibMinerInterface
-	MSI       *MinerServerInterface
+	PrivKey    *ecdsa.PrivateKey
+	Addr       net.Addr
+	Settings   minerserver.MinerNetSettings
+	InkAmt     int
+	LMI        *LibMinerInterface
+	MSI        *MinerServerInterface
+	BlockChain []blockchain.BlockNode
 }
 
 type MinerInfo struct {
@@ -68,7 +75,6 @@ type MinerInfo struct {
 }
 
 type LibMinerInterface struct {
-
 }
 
 type MinerServerInterface struct {
@@ -76,8 +82,8 @@ type MinerServerInterface struct {
 }
 
 type Peer struct {
-	Client 			*rpc.Client
-	LastHeartBeat 	time.Time
+	Client        *rpc.Client
+	LastHeartBeat time.Time
 }
 
 /*******************************
@@ -101,6 +107,7 @@ func (m *Miner) ConnectToServer(ip string) {
 	miner_server_int.Client = client
 	m.MSI = miner_server_int
 }
+
 /*******************************
 | Lib->Miner RPC functions
 ********************************/
@@ -151,6 +158,40 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		var drawReq libminer.DrawRequest
+		json.Unmarshal(req.Msg, &drawReq)
+		canvasSettings := MinerInstance.Settings.CanvasSettings
+
+		svgPath, err := utils.GetParsedSVG(drawReq.SVGString)
+		if err != nil {
+			return err
+		}
+
+		shapelibPath, err := utils.SVGToPoints(svgPath, int(canvasSettings.CanvasXMax), int(canvasSettings.CanvasYMax), drawReq.Fill != TRANSPARENT)
+		if err != nil {
+			return err
+		}
+
+		// Check if we have enough ink
+		shapeTotalInk := shapelibPath.TotalLength()
+		if shapeTotalInk < MinerInstance.InkAmt {
+			return libminer.InsufficientInkError(shapeTotalInk)
+		}
+
+		// Check if it conflicts with any existing shapes
+
+		// for _, blockNode := range MinerInstance.BlockChain {
+
+		// }
+		// if err != nil {
+		// 	currSubArray := shapelibPath.GetSubArray()
+
+		// 	if shapelibPath.Filled {
+		// 		curSubArray.GetPixelsFilled()
+		// 	}
+		// 	return libminer.ShapeOverlapError(drawReq.)
+		// }
+
 		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
 	} else {
@@ -181,14 +222,14 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 }
 
 func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
-    if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		//children := GetBlockChildren(req.BlockHash)
 		//response.Blocks = children
-        return nil
-    } else {
-        err = fmt.Errorf("invalid user")
-        return err
-    }
+		return nil
+	} else {
+		err = fmt.Errorf("invalid user")
+		return err
+	}
 }
 
 /*******************************
@@ -237,7 +278,7 @@ func VerifyBlock(block blockchain.Block) bool {
 	hash := GetBlockHash(block)
 	if len(block.OpHistory) == 0 {
 		return pow.Verify(hash, int(MinerInstance.Settings.PoWDifficultyNoOpBlock))
-	} else { 
+	} else {
 		return pow.Verify(hash, int(MinerInstance.Settings.PoWDifficultyOpBlock))
 	}
 }
@@ -258,7 +299,7 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 	var ignored bool
 	//fmt.Println("ServerHeartBeat::Sending heartbeat")
 	err := msi.Client.Call("RServer.HeartBeat", MinerInstance.PrivKey.PublicKey, &ignored)
-	if CheckError(err, "ServerHeartBeat"){
+	if CheckError(err, "ServerHeartBeat") {
 		//Reconnect to server if timed out
 		msi.Register(MinerInstance.Addr)
 	}
@@ -272,17 +313,17 @@ func (msi *MinerServerInterface) GetPeers() {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
 			LocalAddr, err := net.ResolveTCPAddr("tcp", ":0")
-			if CheckError(err, "GetPeers:ResolvePeerAddr"){
+			if CheckError(err, "GetPeers:ResolvePeerAddr") {
 				continue
 			}
 
 			PeerAddr, err := net.ResolveTCPAddr("tcp", addr.String())
-			if CheckError(err, "GetPeers:ResolveLocalAddr"){
+			if CheckError(err, "GetPeers:ResolveLocalAddr") {
 				continue
 			}
 
 			conn, err := net.DialTCP("tcp", LocalAddr, PeerAddr)
-			if CheckError(err, "GetPeers:DialTCP"){
+			if CheckError(err, "GetPeers:DialTCP") {
 				continue
 			}
 
@@ -290,7 +331,7 @@ func (msi *MinerServerInterface) GetPeers() {
 
 			args := ConnectArgs{conn.LocalAddr().String()}
 			err = client.Call("Peer.Connect", args, &empty)
-			if CheckError(err, "GetPeers:Connect"){
+			if CheckError(err, "GetPeers:Connect") {
 				continue
 			}
 
@@ -298,6 +339,7 @@ func (msi *MinerServerInterface) GetPeers() {
 		}
 	}
 }
+
 /*******************************
 | Connection Management
 ********************************/
@@ -314,13 +356,13 @@ func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Blo
 	heartbeat := time.Tick(interval * time.Millisecond)
 	for {
 		select {
-		case <- heartbeat:
+		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerHeartBeats()
-		case op := <- pop:
+		case op := <-pop:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerPropagateOp(op)
-		case block := <- pblock:
+		case block := <-pblock:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerPropagateBlock(block)
 		default:
@@ -337,7 +379,7 @@ func PeerHeartBeats() {
 	for addr, peer := range PeerList {
 		empty := new(Empty)
 		err := peer.Client.Call("Peer.Hb", &empty, &empty)
-		if !CheckError(err, "PeerHeartBeats:"+addr){
+		if !CheckError(err, "PeerHeartBeats:"+addr) {
 			peer.LastHeartBeat = time.Now()
 		}
 	}
@@ -350,7 +392,7 @@ func PeerPropagateOp(op blockchain.Operation) {
 		empty := new(Empty)
 		args := PropagateOpArgs{op, TTL}
 		err := peer.Client.Call("Peer.PropagateOp", args, &empty)
-		if !CheckError(err, "PeerPropagateOp:"+addr){
+		if !CheckError(err, "PeerPropagateOp:"+addr) {
 			peer.LastHeartBeat = time.Now()
 		}
 	}
@@ -363,11 +405,12 @@ func PeerPropagateBlock(block blockchain.Block) {
 		empty := new(Empty)
 		args := PropagateBlockArgs{block, TTL}
 		err := peer.Client.Call("Peer.PropagateBlock", args, &empty)
-		if !CheckError(err, "PeerPropagateBlock:"+addr){
+		if !CheckError(err, "PeerPropagateBlock:"+addr) {
 			peer.LastHeartBeat = time.Now()
 		}
 	}
 }
+
 // Look through current active connections and delete them if they are not live
 func CheckLiveliness() {
 	interval := time.Duration(MinerInstance.Settings.HeartBeat) * time.Millisecond
@@ -389,7 +432,7 @@ func CheckLiveliness() {
 // 3. Receive job updates via the given channels
 // 4. TODO: Return solution
 
-func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
+func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) {
 	solved := make(chan blockchain.Block)
 
 	// Channel returned by a job call that can kill the workers for that particular job
@@ -397,19 +440,19 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 
 	for {
 		select {
-		case op := <- sop:
+		case op := <-sop:
 			// Received an op from somewhere
 			// Assuming it is properly validated
 			// Add it to the block we were working on
 			// reissue job
 			fmt.Println("got new op to hash:", op)
-		case block := <- sblock:
+		case block := <-sblock:
 			// Received a block from somewhere
 			// Assume that this block was validated
 			// Assume this is the next block to build off of
 			// Reissue a job with this blockhash as prevBlock
 			fmt.Println("got new block to hash:", block)
-		case sol := <- solved:
+		case sol := <-solved:
 			fmt.Println("got a solution:", sol)
 
 			// Kill current job
@@ -431,29 +474,29 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block){
 }
 
 // Initiate a job with an empty op array and a blockhash
-func NoopJob(hash string, solved chan blockchain.Block) (chan bool){
+func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 	block := blockchain.Block{PrevHash: hash,
 		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
 		CurrJobId++
 		// Split up the start by the maximum number of threads we allow
-		start := math.MaxUint32/MAX_THREADS * i
+		start := math.MaxUint32 / MAX_THREADS * i
 		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyNoOpBlock, uint32(start), solved, done)
 	}
 	return done
 }
 
 // Initiate the a job with a predefined op array
-func OpJob(hash string, Ops []blockchain.Operation, solved chan blockchain.Block) (chan bool){
+func OpJob(hash string, Ops []blockchain.Operation, solved chan blockchain.Block) chan bool {
 	block := blockchain.Block{PrevHash: hash,
-		OpHistory: Ops,
+		OpHistory:   Ops,
 		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
 		CurrJobId++
 		// Split up the start by the maximum number of threads we allow
-		start := math.MaxUint32/MAX_THREADS * i
+		start := math.MaxUint32 / MAX_THREADS * i
 		go pow.Solve(block, MinerInstance.Settings.PoWDifficultyOpBlock, uint32(start), solved, done)
 	}
 	return done
@@ -544,7 +587,6 @@ func main() {
 	pop := make(chan blockchain.Operation)
 	pblock := make(chan blockchain.Block)
 	go ManageConnections(pop, pblock)
-
 
 	// 4. Setup Problem Solving
 	sop := make(chan blockchain.Operation)
