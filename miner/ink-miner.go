@@ -249,19 +249,21 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
-	// Create a new node for newBlock and append it to BlockNodeArray
-	newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
-	BlockNodeArray = append(BlockNodeArray, newBlockNode)
-
-	// Create an entry for newBlock in BlockHashMap
-	childIndex := len(BlockNodeArray) - 1
-	childHash := GetBlockHash(newBlock)
 	if VerifyBlock(newBlock) {
+		// Create a new node for newBlock and append it to BlockNodeArray
+		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
+		BlockNodeArray = append(BlockNodeArray, newBlockNode)
+
+		// Create an entry for newBlock in BlockHashMap
+		childIndex := len(BlockNodeArray) - 1
+		childHash := GetBlockHash(newBlock)
+
 		BlockHashMap[childHash] = childIndex
 		// Update the entry for newBlock's parent in BlockNodeArray
 		parentIndex := BlockHashMap[newBlock.PrevHash]
-		parentBlockNode := BlockNodeArray[parentIndex]
+		parentBlockNode := &BlockNodeArray[parentIndex]
 		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		//fmt.Println("parent's node with new child:", parentBlockNode)
 		return nil
 	}
 	err = fmt.Errorf("Block hash does not match up with block contents!")
@@ -443,6 +445,7 @@ func CheckLiveliness() {
 // 4. TODO: Return solution
 
 func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) {
+	// Channel for receiving the final block w/ nonce from workers
 	solved := make(chan blockchain.Block)
 
 	// Channel returned by a job call that can kill the workers for that particular job
@@ -456,23 +459,52 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) 
 			// Add it to the block we were working on
 			// reissue job
 			fmt.Println("got new op to hash:", op)
+			// Kill current job
+			close(done)
+			close(solved)
+
+			// Make a new channel
+			solved = make(chan blockchain.Block)
+
+			// TODO: setup a new OpJob with the given op
+
 		case block := <-sblock:
 			// Received a block from somewhere
 			// Assume that this block was validated
 			// Assume this is the next block to build off of
 			// Reissue a job with this blockhash as prevBlock
 			fmt.Println("got new block to hash:", block)
+
+			// Kill current job
+			close(done)
+			close(solved)
+
+			// Make a new channel
+			solved = make(chan blockchain.Block)
+
+			// Assume this was block was validated
+			// Assume this block has already been inserted 
+			done = NoopJob(GetBlockHash(block), solved)
+
 		case sol := <-solved:
-			fmt.Println("got a solution:", sol)
+			fmt.Println("got a solution: ", sol)
 
 			// Kill current job
 			close(done)
 			close(solved)
 			// Make a new channel
 			solved = make(chan blockchain.Block)
+
 			// Insert block into our data structure
+			// TODO: Do we insert it here or upstream via a channel?
 			InsertBlock(sol)
-			done = NoopJob(GetBlockHash(sol), solved)
+			//fmt.Println("inserted solution: ", BlockNodeArray)
+			// Start a job on the longest block in the chain
+			blockchain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+			//fmt.Println("state of the longest blockchain", blockchain)
+			lastblock := blockchain[len(blockchain)-1]
+			done = NoopJob(GetBlockHash(lastblock), solved)
+
 		default:
 			if CurrJobId == 0 {
 				fmt.Println("Initiating the first job")
@@ -485,6 +517,7 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) 
 
 // Initiate a job with an empty op array and a blockhash
 func NoopJob(hash string, solved chan blockchain.Block) chan bool {
+	CurrJobId++
 	block := blockchain.Block{PrevHash: hash,
 		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
@@ -499,6 +532,7 @@ func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 
 // Initiate the a job with a predefined op array
 func OpJob(hash string, Ops []blockchain.Operation, solved chan blockchain.Block) chan bool {
+	CurrJobId++
 	block := blockchain.Block{PrevHash: hash,
 		OpHistory:   Ops,
 		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
@@ -622,7 +656,7 @@ func main() {
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
 	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
-
+	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
 	// 3. Setup Miner Heartbeat Manager
 	pop := make(chan blockchain.Operation)
 	pblock := make(chan blockchain.Block)
