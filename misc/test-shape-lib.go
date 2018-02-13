@@ -55,26 +55,27 @@ func main() {
 	//	points[9] = shapelib.Point {550, 175, false }
 
 	// SQUARE
-	//	points := make([]shapelib.Point, 5)
-	//	points[0] = shapelib.Point {0, 0, false }
-	//	points[1] = shapelib.Point {0, 299, false }
-	//	points[2] = shapelib.Point {299, 299, false }
-	//	points[3] = shapelib.Point {299, 0, false }
-	//	points[4] = shapelib.Point {0, 0, false }
+	//points := make([]shapelib.Point, 5)
+	//points[0] = shapelib.Point {0, 0, false }
+	//points[1] = shapelib.Point {0, 300, false }
+	//points[2] = shapelib.Point {300, 300, false }
+	//points[3] = shapelib.Point {300, 0, false }
+	//points[4] = shapelib.Point {0, 0, false }
 
 	path1 := shapelib.NewPath(points, true)
-	sub1 := path1.GetSubArray()
+	sub1 := path1.SubArray()
 	fmt.Println("Total len path:", path1.TotalLength())
 
 	// CIRCLE
 	//	circ := shapelib.NewCircle(150, 150, 100, true )
-	//	sub2 := circ.GetSubArray()
+	//	sub2 := circ.SubArray()
 	//	fmt.Println("Circumference:", circ.Circumference())
 
-	fmt.Println("Pixels filled:", sub1.GetPixelsFilled())
+	fmt.Println("Pixels filled:", sub1.PixelsFilled())
+	_, cost := path1.SubArrayAndCost()
+	fmt.Println("Cost:", cost)
 
 	a := shapelib.NewPixelArray(600, 400)
 	a.MergeSubArray(sub1)
 	//fmt.Println("Square circle conflict?", a.HasConflict(sub2))
-	a.Print()
 }
