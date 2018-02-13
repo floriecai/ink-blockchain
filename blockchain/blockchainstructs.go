@@ -19,10 +19,9 @@ type Operation struct {
 
 type Block struct {
 	PrevHash    string
-	ThisHash    string
 	OpHistory   []Operation
 	MinerPubKey string
-	Nonce       string
+	Nonce       uint32
 }
 
 type BlockNode struct {
