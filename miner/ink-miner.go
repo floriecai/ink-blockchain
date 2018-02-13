@@ -358,10 +358,8 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 	}
 }
 
-func (msi *MinerServerInterface) GetPeers() {
-	var addrSet []net.Addr
+func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 	var empty Empty
-	msi.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
 	for _, addr := range addrSet {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
@@ -382,7 +380,7 @@ func (msi *MinerServerInterface) GetPeers() {
 
 			client := rpc.NewClient(conn)
 
-			args := ConnectArgs{conn.LocalAddr().String()}
+			args := ConnectArgs{MinerInstance.Addr}
 			err = client.Call("Peer.Connect", args, &empty)
 			if CheckError(err, "GetPeers:Connect") {
 				continue
@@ -403,7 +401,8 @@ func (msi *MinerServerInterface) GetPeers() {
 // 4. Request new nodes from server and connect to them when peers drop too low
 // 5. When a operation or block is sent through the channel, heartbeat will be replaced by Propagate<Type>
 // This is the central point of control for the peer connectivity
-func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs) {
+
+func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs, peerconn chan net.Addr) {
 	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
@@ -412,7 +411,11 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs)
 		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerHeartBeats()
-		case op := <-pop:
+		case addr := <- peerconn: 
+			// Connection request from peerRpc
+			addrSet := []net.Addr{addr}
+			MinerInstance.MSI.GetPeers(addrSet)
+		case op := <- pop:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerPropagateOp(op)
 		case block := <-pblock:
@@ -421,7 +424,9 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs)
 		default:
 			CheckLiveliness()
 			if len(PeerList) < int(MinerInstance.Settings.MinNumMinerConnections) {
-				MinerInstance.MSI.GetPeers()
+				var addrSet []net.Addr
+				MinerInstance.MSI.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
+				MinerInstance.MSI.GetPeers(addrSet)
 			}
 		}
 	}
@@ -666,9 +671,10 @@ func main() {
 	pblock := make(chan PropagateBlockArgs, 8)
 	sop := make(chan blockchain.Operation, 8)
 	sblock := make(chan blockchain.Block, 8)
+	peerconn := make(chan net.Addr, 1)
 
 	// 3. Setup Miner-Miner Listener
-	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock)
+	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock, peerconn)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
@@ -679,7 +685,7 @@ func main() {
 	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
 
 	// 4. Setup Miner Heartbeat Manager
-	go ManageConnections(pop, pblock)
+	go ManageConnections(pop, pblock, peerconn)
 
 	// 5. Setup Problem Solving
 	go ProblemSolver(sop, sblock)
