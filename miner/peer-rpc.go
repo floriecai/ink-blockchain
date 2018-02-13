@@ -131,7 +131,7 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 
 	// TODO: Validate the shapehash using the public key
 
-	// Get the shapelib.Path representation for this svg path
+	// Get the shapelib.Shape representation for this svg
 	shape, err := p.miner.getShapeFromOp(args.Op)
 	if err != nil {
 		return err
