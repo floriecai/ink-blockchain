@@ -357,17 +357,12 @@ func (canvas CanvasT) GetGenesisBlock() (blockHash string, err error) {
 	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
 	req := getRPCRequest(msg, &canvas.PrivKey)
 
-	var resp libminer.BlocksResponse
-
-	err = canvas.Miner.Call("LibMinerInterface.GetGenesisBlock", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetGenesisBlock", &req, &blockHash)
 	if err != nil {
 		checkError(err)
 		return "", err
 	}
-
-	// TODO fcai, get blockhash from resp
-	// return resp.Block[0].Hash, nil
-	return "", err
+	return blockHash, err
 }
 
 // Retrieves the children blocks of the block identified by blockHash.
@@ -379,19 +374,20 @@ func (canvas CanvasT) GetChildren(blockHash string) (blockHashes []string, err e
 		return blockHashes, DisconnectedError(string(canvas.Id))
 	}
 
-	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	msg, _ := json.Marshal(libminer.BlockRequest{Id: canvas.Id, BlockHash: blockHash})
 	req := getRPCRequest(msg, &canvas.PrivKey)
 
 	var resp libminer.BlocksResponse
 
-	err = canvas.Miner.Call("LibMinerInterface.GetBlockChain", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetChildren", &req, &resp)
 
-	// TODO fcai - get the children of the blockchain
-	// for i, block := range resp.Blocks {
-	// 	if block.Hash == blockHash {
-	// 		// TODO get the children
-	// 	}
-	// }
+	for i, block := range resp.Blocks {
+		h := md5.New()
+		bytes, _ := json.Marshal(block)
+		h.Write(bytes)
+		hash := hex.EncodeToString(h.Sum(nil))
+		blockHashes = append(blockHashes, hash)
+	}
 
 	return blockHashes, err
 }

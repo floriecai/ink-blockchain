@@ -148,6 +148,7 @@ func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libmin
 
 func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
 		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		return nil
 	}
@@ -158,6 +159,7 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
 		var drawReq libminer.DrawRequest
 		json.Unmarshal(req.Msg, &drawReq)
 		canvasSettings := MinerInstance.Settings.CanvasSettings
@@ -235,8 +237,14 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 
 func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		//children := GetBlockChildren(req.BlockHash)
-		//response.Blocks = children
+		var blockRequest libminer.BlockRequest
+		json.Unmarshal(req.Msg, &blockRequest)
+		if _, ok := BlockHashMap[blockRequest.BlockHash]; !ok {
+			err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
+			return err
+		}
+		children := GetBlockChildren(blockRequest.BlockHash)
+		response.Blocks = children
 		return nil
 	}
 	err = fmt.Errorf("invalid user")
@@ -249,16 +257,16 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
-	hash := GetBlockHash(newBlock)
-	if _, ok := BlockHashMap[hash]; !ok && VerifyBlock(newBlock) {
+	if VerifyBlock(newBlock) {
 		// Create a new node for newBlock and append it to BlockNodeArray
 		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
 		BlockNodeArray = append(BlockNodeArray, newBlockNode)
 
 		// Create an entry for newBlock in BlockHashMap
 		childIndex := len(BlockNodeArray) - 1
-		BlockHashMap[hash] = childIndex
+		childHash := GetBlockHash(newBlock)
 
+		BlockHashMap[childHash] = childIndex
 		// Update the entry for newBlock's parent in BlockNodeArray
 		parentIndex := BlockHashMap[newBlock.PrevHash]
 		parentBlockNode := &BlockNodeArray[parentIndex]
@@ -295,6 +303,52 @@ func VerifyBlock(block blockchain.Block) bool {
 	}
 }
 
+
+// Returns an array of Blocks that are on the longest path
+func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) []blockchain.Block {
+	blockChain := make([]blockchain.Block, 0)
+
+	initBIndex := blockHashMap[initBlockHash]
+	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
+
+	if len(blockNodeArray[initBIndex].Children) == 0 {
+		return blockChain
+	}
+
+	var longestPath []blockchain.Block
+	maxLen := -1
+
+	for _, childIndex := range blockNodeArray[initBIndex].Children {
+		child := blockNodeArray[childIndex]
+
+		childHash := GetBlockHash(child.Block)
+		childPath := GetLongestPath(childHash, blockHashMap, blockNodeArray)
+		if maxLen < len(childPath) {
+			maxLen = len(childPath)
+			longestPath = childPath
+		}
+	}
+
+	blockChain = append(blockChain, longestPath...)
+	return blockChain
+
+}
+
+// Calculates how much ink a particular miner public key has
+func CalculateInk(minerKey string) int {
+	blockchain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	var inkAmt uint32 = 0
+	for _, block := range blockchain {
+		if block.MinerPubKey == minerKey {
+			if len(block.OpHistory) == 0 {
+				inkAmt += MinerInstance.Settings.InkPerNoOpBlock
+			} else {
+				inkAmt += MinerInstance.Settings.InkPerOpBlock
+			}
+		}
+	}
+	return int(inkAmt)
+}
 /*******************************
 | Server Management functions
 ********************************/
@@ -593,36 +647,6 @@ func ExtractKeyPairs(pubKey, privKey string) {
 
 func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
-}
-
-// Returns an array of Blocks that are on the longest path
-func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) []blockchain.Block {
-	blockChain := make([]blockchain.Block, 0)
-
-	initBIndex := blockHashMap[initBlockHash]
-	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
-
-	if len(blockNodeArray[initBIndex].Children) == 0 {
-		return blockChain
-	}
-
-	var longestPath []blockchain.Block
-	maxLen := -1
-
-	for _, childIndex := range blockNodeArray[initBIndex].Children {
-		child := blockNodeArray[childIndex]
-
-		childHash := GetBlockHash(child.Block)
-		childPath := GetLongestPath(childHash, blockHashMap, blockNodeArray)
-		if maxLen < len(childPath) {
-			maxLen = len(childPath)
-			longestPath = childPath
-		}
-	}
-
-	blockChain = append(blockChain, longestPath...)
-	return blockChain
-
 }
 
 func GetBlockHash(block blockchain.Block) string {
