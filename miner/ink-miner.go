@@ -362,7 +362,7 @@ func (msi *MinerServerInterface) GetPeers() {
 // 4. Request new nodes from server and connect to them when peers drop too low
 // 5. When a operation or block is sent through the channel, heartbeat will be replaced by Propagate<Type>
 // This is the central point of control for the peer connectivity
-func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Block) {
+func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs) {
 	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
@@ -372,7 +372,8 @@ func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Blo
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerHeartBeats()
 		case op := <-pop:
-			MinerInstance.MSI.ServerHeartBeat() PeerPropagateOp(op)
+			MinerInstance.MSI.ServerHeartBeat()
+			PeerPropagateOp(op)
 		case block := <-pblock:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerPropagateBlock(block)
@@ -398,10 +399,10 @@ func PeerHeartBeats() {
 
 // Send a PropagateOp call to each peer
 // Assumption: Nothing needs to be done on the miner itself, only send the op onwards
-func PeerPropagateOp(op blockchain.Operation) {
+func PeerPropagateOp(op PropagateOpArgs) {
 	for addr, peer := range PeerList {
 		empty := new(Empty)
-		args := PropagateOpArgs{op, TTL}
+		args := PropagateOpArgs{op.Op, op.TTL}
 		err := peer.Client.Call("Peer.PropagateOp", args, &empty)
 		if !CheckError(err, "PeerPropagateOp:"+addr) {
 			peer.LastHeartBeat = time.Now()
@@ -411,10 +412,10 @@ func PeerPropagateOp(op blockchain.Operation) {
 
 // Send a PropagateBlock call to each peer
 // Assumption: Nothing needs to be done on the miner itself, only send the block onwards
-func PeerPropagateBlock(block blockchain.Block) {
+func PeerPropagateBlock(block PropagateBlockArgs) {
 	for addr, peer := range PeerList {
 		empty := new(Empty)
-		args := PropagateBlockArgs{block, TTL}
+		args := PropagateBlockArgs{block.Block, block.TTL}
 		err := peer.Client.Call("Peer.PropagateBlock", args, &empty)
 		if !CheckError(err, "PeerPropagateBlock:"+addr) {
 			peer.LastHeartBeat = time.Now()
@@ -648,8 +649,15 @@ func main() {
 	ln, _ := net.Listen("tcp", ":0")
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
-	// 2. Setup Miner-Miner Listener
-	go listenPeerRpc(ln, MinerInstance)
+
+	// 2. Create communication channels between goroutines
+	pop := make(chan PropagateOpArgs, 8)
+	pblock := make(chan PropagateBlockArgs, 8)
+	sop := make(chan blockchain.Operation)
+	sblock := make(chan blockchain.Block)
+
+	// 3. Setup Miner-Miner Listener
+	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
@@ -659,16 +667,12 @@ func main() {
 	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
 	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
 
-	// 3. Setup Miner Heartbeat Manager
-	pop := make(chan blockchain.Operation)
-	pblock := make(chan blockchain.Block)
+	// 4. Setup Miner Heartbeat Manager
 	go ManageConnections(pop, pblock)
 
-	// 4. Setup Problem Solving
-	sop := make(chan blockchain.Operation)
-	sblock := make(chan blockchain.Block)
+	// 5. Setup Problem Solving
 	go ProblemSolver(sop, sblock)
 
-	// 5. Setup Client-Miner Listener (this thread)
+	// 6. Setup Client-Miner Listener (this thread)
 	OpenLibMinerConn(":0")
 }

@@ -15,7 +15,6 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 		fmt.Println("checkInkAndConflicts called")
 	}
 
-	// FIXME: this should be the miner's block data structure.
 	// TODO: Need to figure out exactly what to check. There could be multiple
 	// longest paths. It could be that there is a conflict on one and
 	// not the other. Need to think about this one carefully.
@@ -92,9 +91,8 @@ func (m Miner) checkDeletion(sHash string, pubkey string) error {
 		fmt.Println("checkInkAndConflicts called")
 	}
 
-	// FIXME: this should be the miner's block data structure.
 	// TODO: Need to figure out exactly what to check. There could be multiple
-	// longest paths. It could be that there is a conflict on one and
+	// longest paths. It could be that there is a deletion allowed on one but
 	// not the other. Need to think about this one carefully.
 	blocks := make([]blockchain.Block, 0)
 

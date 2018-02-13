@@ -34,18 +34,8 @@ import (
 // Struct for maintaining state of the PeerRpc
 type PeerRpc struct {
 	miner *Miner
-<<<<<<< HEAD
 	opCh  chan PropagateOpArgs
 	blkCh chan PropagateBlockArgs
-=======
-
-	// Param blocksPublished is a map used as a set data structure. It
-	// stores the blockhash as a string. Any received blockhash that is
-	// found to be in this set is assumed to already have been published to
-	// peers, and will not be published again. This is in order to avoid
-	// broadcast loops.
-	blocksPublished map[string]Empty
->>>>>>> d891612864f3ffc7f401bb4e93983ac2282e7567
 }
 
 // Empty struct. Use for filling required but unused function parameters.
@@ -56,22 +46,13 @@ type ConnectArgs struct {
 }
 
 type PropagateOpArgs struct {
-<<<<<<< HEAD
 	Op blockchain.Operation
-=======
-	op  blockchain.Operation
->>>>>>> d891612864f3ffc7f401bb4e93983ac2282e7567
 	TTL int
 }
 
 type PropagateBlockArgs struct {
-<<<<<<< HEAD
 	Block blockchain.Block
 	TTL int
-=======
-	block blockchain.Block
-	TTL   int
->>>>>>> d891612864f3ffc7f401bb4e93983ac2282e7567
 }
 
 type GetBlockChainArgs struct {
@@ -106,10 +87,8 @@ func (m Miner)getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGOp)
 	if err == nil {
 		// Error is nil, should be parsable into shapelib.Path
-		path := utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
+		return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
 			int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
-
-		return path[0], nil
 	}
 
 	// TODO: try parsing it as a circle
@@ -134,10 +113,8 @@ func (m Miner)getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	}
 
 	// Get the shapelib.Path representation for this svg path
-	path := utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
+	return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
 		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
-
-	return path[0], nil
 }
 
 // This lock is intended to be used so that only one op or block will be in the
@@ -220,7 +197,8 @@ func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 
 // This will initialize the miner peer listener.
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
-		blkCh chan PropagateBlockArgs) {
+		blkCh chan PropagateBlockArgs, opSCh chan blockchain.Operation,
+		blkSCh chan blockchain.Block) {
 	pRpc := PeerRpc{miner, opCh, blkCh}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
