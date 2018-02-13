@@ -85,7 +85,7 @@ func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
 }
 
 // Get a shape interface from an operation.
-func (m Miner)getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
+func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGOp)
 	if err == nil {
 		// Error is nil, should be parsable into shapelib.Path
@@ -106,7 +106,7 @@ func (m Miner)getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 }
 
 // Get a shapelib.Path from an operation
-func (m Miner)getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
+func (m Miner) getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGOp)
 	if err != nil {
 		fmt.Println("PropagateOp err:", err);
@@ -142,10 +142,11 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	validateLock.Lock()
 	defer validateLock.Unlock()
 
+	blocks := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 	if args.Op.OpType == blockchain.ADD {
-		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.Op.PubKey)
+		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.Op.PubKey, blocks)
 	} else {
-		err = p.miner.checkDeletion(args.Op.ShapeHash, args.Op.PubKey)
+		err = p.miner.checkDeletion(args.Op.ShapeHash, args.Op.PubKey, blocks)
 	}
 
 	if err != nil {

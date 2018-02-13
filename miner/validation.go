@@ -1,3 +1,14 @@
+/*
+
+Purpose of this file is to contain the validation functions needed for the add
+and delete operations for shapes in the blockchain.
+
+Need to figure out exactly what to check. There could be multiple longest paths.
+It could be that there is a conflict on one and not the other. Need to think
+carefully about this when calling the functions in this file.
+
+*/
+
 package main
 
 import (
@@ -10,15 +21,10 @@ const LOG_VALIDATION = true
 
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
-		pubkey string) error {
+		pubkey string, blocks []blockchain.Block) error {
 	if LOG_VALIDATION {
 		fmt.Println("checkInkAndConflicts called")
 	}
-
-	// TODO: Need to figure out exactly what to check. There could be multiple
-	// longest paths. It could be that there is a conflict on one and
-	// not the other. Need to think about this one carefully.
-	blocks := GetLongestPath(m.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 
 	// Pixel array for checking shape conflicts
 	pixelarr := shapelib.NewPixelArray(int(m.Settings.CanvasSettings.CanvasXMax),
@@ -86,15 +92,10 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 }
 
 // Function used to determine if a delete operation is allowed on the blockchain.
-func (m Miner) checkDeletion(sHash string, pubkey string) error {
+func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Block) error {
 	if LOG_VALIDATION {
 		fmt.Println("checkInkAndConflicts called")
 	}
-
-	// TODO: Need to figure out exactly what to check. There could be multiple
-	// longest paths. It could be that there is a deletion allowed on one but
-	// not the other. Need to think about this one carefully.
-	blocks := GetLongestPath(m.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 
 	delAllowed := false
 
