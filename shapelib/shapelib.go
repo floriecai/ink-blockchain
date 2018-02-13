@@ -24,17 +24,23 @@ Public types and methods:
 
 	PixelSubArray
 	  Print()
-	  GetPixelsFilled() -> int
+	  PixelsFilled() -> int
 
 	Point
 
+	Shape
+	  SubArray()        -> PixelSubArray
+	  SubArrayAndCost() -> int
+
 	Path
-	  GetSubArray() -> PixelSubArray
-	  TotalLength() -> int
+	  SubArray()        -> PixelSubArray
+	  TotalLength()     -> int
+	  SubArrayAndCost() -> int
 
 	Circle
-	  GetSubArray() -> PixelSubArray
-	  Circumference() -> int
+	  SubArray()        -> PixelSubArray
+	  Circumference()   -> int
+	  SubArrayAndCost() -> int
 
 
 This file in particular contains all type definitions and some misc. functions.
@@ -57,6 +63,19 @@ type PixelSubArray struct {
 	bytes      [][]byte
 	xStartByte int
 	yStart     int
+}
+
+// Interface for a shape that can return its subarray of pixel filled.
+type Shape interface {
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape.
+	SubArray() PixelSubArray
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape, as well as the cost that
+	// is associated with the shape.
+	SubArrayAndCost() (subarr PixelSubArray, cost int)
 }
 
 // Represents the data of a Path SVG item.
