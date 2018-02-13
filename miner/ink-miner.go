@@ -21,7 +21,6 @@ import (
 	"../libminer"
 	"../minerserver"
 	"../pow"
-	"../utils"
 )
 
 const (
@@ -160,37 +159,28 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		var drawReq libminer.DrawRequest
 		json.Unmarshal(req.Msg, &drawReq)
-		canvasSettings := MinerInstance.Settings.CanvasSettings
 
-		svgPath, err := utils.GetParsedSVG(drawReq.SVGString)
+		op := blockchain.Operation{
+			"", // ShapeHash, FIXME
+			"", // OpSig, FIXME
+			blockchain.ADD,
+			drawReq.SVGString,
+			drawReq.Fill,
+			drawReq.Stroke,
+			""} // PubKey, FIXME
+
+		shape, err := MinerInstance.getShapeFromOp(op)
 		if err != nil {
 			return err
 		}
 
-		shapelibPath, err := utils.SVGToPoints(svgPath, int(canvasSettings.CanvasXMax), int(canvasSettings.CanvasYMax), drawReq.Fill != TRANSPARENT)
-		if err != nil {
-			return err
-		}
+		subarr, inkRequired := shape.SubArrayAndCost()
 
-		// Check if we have enough ink
-		shapeTotalInk := shapelibPath.TotalLength()
-		if shapeTotalInk < MinerInstance.InkAmt {
-			return libminer.InsufficientInkError(shapeTotalInk)
-		}
+		validateLock.Lock()
+		defer validateLock.Unlock()
 
-		// Check if it conflicts with any existing shapes
-
-		// for _, blockNode := range MinerInstance.BlockChain {
-
-		// }
-		// if err != nil {
-		// 	currSubArray := shapelibPath.GetSubArray()
-
-		// 	if shapelibPath.Filled {
-		// 		curSubArray.GetPixelsFilled()
-		// 	}
-		// 	return libminer.ShapeOverlapError(drawReq.)
-		// }
+		blocks := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, "", blocks) // FIXME: PubKey
 
 		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
@@ -206,18 +196,15 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		json.Unmarshal(req.Msg, &deleteReq)
 
 		blockChain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		err = MinerInstance.checkDeletion(deleteReq.ShapeHash, "", blockChain) // FIXME: PubKey
 
-		for _, block := range blockChain {
-			for _, shapeOp := range block.OpHistory {
-				if shapeOp.ShapeHash == deleteReq.ShapeHash {
-					// TODO fcai
-					// Need to have enough blocks following.
-					response.InkRemaining = uint32(MinerInstance.InkAmt)
-					return nil
-				}
-			}
+		if err != nil {
+			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
+		} else {
+			// TODO:
+			// send to solver
+			// send to connection manager
 		}
-		return libminer.ShapeOwnerError(deleteReq.ShapeHash)
 	}
 
 	err = fmt.Errorf("invalid user")
