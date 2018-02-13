@@ -44,9 +44,7 @@ func NewPath(points []Point, filled bool) Path {
 
 	return Path{points, filled, xMin, xMax, yMin, yMax}
 }
-
-// Generate a sub array for the Path object.
-// Will fill based on the Filled field of Path.
+// Generate a sub array for the Path object.  // Will fill based on the Filled field of Path.
 func (p Path) SubArray() PixelSubArray {
 	// Create a new sub array that can fit the Path
 	sub := NewPixelSubArray(p.XMin, p.XMax, p.YMin, p.YMax)
@@ -170,7 +168,7 @@ func (p Path) Area() int {
 		y1 := float64(p.Points[i].Y)
 		y2 := float64(p.Points[i+1].Y)
 
-		sum += x1*y2 - x2*y1
+		sum += 0.5 * (x1*y2 - x2*y1)
 	}
 
 	return int(math.Abs(sum) + 0.5)
