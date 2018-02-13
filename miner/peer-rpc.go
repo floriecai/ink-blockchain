@@ -36,6 +36,8 @@ type PeerRpc struct {
 	miner *Miner
 	opCh  chan PropagateOpArgs
 	blkCh chan PropagateBlockArgs
+	opSCh  chan blockchain.Operation
+	blkSCh chan blockchain.Block
 }
 
 // Empty struct. Use for filling required but unused function parameters.
@@ -150,7 +152,8 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 		return err
 	}
 
-	// TODO: Update the solver.
+	// Update the solver. There will likely need to be additional logic somewhere here.
+	p.opSCh <- args.Op
 
 	// Propagate op to list of connected peers.
 	// TODO: figure out a way to optimize this... don't want to revalidate ops and stuff
@@ -169,14 +172,16 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 	// - Validate the block
 	// - Add block to block chain.
-	// - Update the solver
 
 	validateLock.Lock()
 	defer validateLock.Unlock()
 
 	// Propagate block to list of connected peers.
-	// TODO: figure out a way to optimize this... don't want to revalidate blocks all the time
 
+	// Update the solver. There will likely need to be additional logic somewhere here.
+	p.blkSCh <- args.Block
+
+	// Propagate block to list of connected peers.
 	args.TTL--
 	if args.TTL > 0 {
 		p.blkCh <- args
@@ -199,7 +204,7 @@ func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 		blkCh chan PropagateBlockArgs, opSCh chan blockchain.Operation,
 		blkSCh chan blockchain.Block) {
-	pRpc := PeerRpc{miner, opCh, blkCh}
+	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 

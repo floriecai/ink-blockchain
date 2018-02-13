@@ -653,8 +653,8 @@ func main() {
 	// 2. Create communication channels between goroutines
 	pop := make(chan PropagateOpArgs, 8)
 	pblock := make(chan PropagateBlockArgs, 8)
-	sop := make(chan blockchain.Operation)
-	sblock := make(chan blockchain.Block)
+	sop := make(chan blockchain.Operation, 8)
+	sblock := make(chan blockchain.Block, 8)
 
 	// 3. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock)
