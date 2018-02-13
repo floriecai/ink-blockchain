@@ -14,6 +14,7 @@ import (
 	"net/rpc"
 	"os"
 	"time"
+	"../blockchain"
 	"../libminer"
 	"../minerserver"
 )
@@ -21,14 +22,23 @@ import (
 // Our singleton miner instance
 var MinerInstance *Miner
 
-//Primitive representation of active art miners
+// Primitive representation of active art miners
 var ArtNodeList map[int]bool = make(map[int]bool)
 
-//List of peers WE connect TO, not peers that connect to US
+// List of peers WE connect TO, not peers that connect to US
 var PeerList map[string]*Peer = make(map[string]*Peer)
 
-//Global TTL of propagate requests
+// Global TTL of propagate requests
 var TTL int = 100
+
+// Global block chain array
+var BlockNodeArray []blockchain.BlockNode
+
+// Global block chain search map
+// Key: Block.ThisHash
+// Val: IndexOfBlock(Block)
+var BlockHashMap map[string]int = make(map[string]int)
+
 /*******************************
 | Structs for the miners to use internally
 | note: shared structs should be put in a different lib
@@ -56,9 +66,10 @@ type MinerServerInterface struct {
 }
 
 type Peer struct {
-	Client        *rpc.Client
-	LastHeartBeat time.Time
+	Client 			*rpc.Client
+	LastHeartBeat 	time.Time
 }
+
 /*******************************
 | Miner functions
 ********************************/
@@ -80,11 +91,12 @@ func (m *Miner) ConnectToServer(ip string) {
 	miner_server_int.Client = client
 	m.MSI = miner_server_int
 }
+
 /*******************************
 | Lib->Miner RPC functions
 ********************************/
 
-//Setup an interface that implements rpc calls for the lib
+// Setup an interface that implements rpc calls for the lib
 func OpenLibMinerConn(ip string) {
 	lib_miner_int := new(LibMinerInterface)
 
@@ -149,12 +161,6 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 	}
 }
 
-/* TODO
-func (lmi *Lib_Miner_Interface) GetBlockChain(hello *libminer.Request, response *[]Block) (err error) {
-	return nil
-}
-*/
-
 func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *string) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		*response = MinerInstance.Settings.GenesisBlockHash
@@ -163,6 +169,51 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 		err = fmt.Errorf("invalid user")
 		return err
 	}
+}
+
+func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
+    if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		children := GetBlockChildren(req.BlockHash)
+		response.Blocks = children
+        return nil
+    } else {
+        err = fmt.Errorf("invalid user")
+        return err
+    }
+}
+
+/*******************************
+| Blockchain functions
+********************************/
+
+// Appends the new block to BlockArray and updates BlockHashMap
+func InsertBlock(newBlock blockchain.Block) {
+	// Create a new node for newBlock and append it to BlockNodeArray
+	newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
+	BlockNodeArray = append(BlockNodeArray, newBlockNode)
+	// Create an entry for newBlock in BlockHashMap
+	childIndex := len(BlockNodeArray) - 1
+	BlockHashMap[newBlock.ThisHash] = childIndex
+	// Update the entry for newBlock's parent in BlockNodeArray
+	parentIndex := BlockHashMap[newBlock.PrevHash]
+	parentBlock := BlockNodeArray[i].Block
+	parentBlock.Children = append(parentBlock.Children, childIndex)
+}
+
+// Do we need this?
+// It seems like the only block individually retrieved is the GenesisBlock
+func GetBlock(blockHash string) blockchain.Block {
+	index := BlockHashMap[blockHash]
+	return BlockNodeArray[index].Block
+}
+
+func GetBlockChildren(blockHash string) []blockchain.Block {
+	var children []blockchain.Block
+	parentIndex := BlockHashMap[blockHash]
+	for _, childIndex := range BlockNodeArray[parentIndex].Children {
+		children = append(children, BlockNodeArray[childIndex].Block)
+	}
+	return children
 }
 
 /*******************************
@@ -231,8 +282,8 @@ func (msi *MinerServerInterface) GetPeers() {
 // 4. Request new nodes from server and connect to them when peers drop too low
 // 5. When a operation or block is sent through the channel, heartbeat will be replaced by Propagate<Type>
 // This is the central point of control for the peer connectivity
-func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs) {
-	// Send heartbeats at three times the timeout interval to be safe
+func ManageConnections(pop chan blockchain.Operation, pblock chan blockchain.Block) {
+	// Send heartbeats three times every timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 3)
 	heartbeat := time.Tick(interval * time.Millisecond)
 	for {
@@ -268,10 +319,10 @@ func PeerHeartBeats() {
 
 // Send a PropagateOp call to each peer
 // Assumption: Nothing needs to be done on the miner itself, only send the op onwards
-func PeerPropagateOp(op PropagateOpArgs) {
+func PeerPropagateOp(op blockchain.Operation) {
 	for addr, peer := range PeerList {
 		empty := new(Empty)
-		args := PropagateOpArgs{op.Op, op.TTL}
+		args := PropagateOpArgs{op, TTL}
 		err := peer.Client.Call("Peer.PropagateOp", args, &empty)
 		if !CheckError(err, "PeerPropagateOp:"+addr){
 			peer.LastHeartBeat = time.Now()
@@ -281,10 +332,10 @@ func PeerPropagateOp(op PropagateOpArgs) {
 
 // Send a PropagateBlock call to each peer
 // Assumption: Nothing needs to be done on the miner itself, only send the block onwards
-func PeerPropagateBlock(block PropagateBlockArgs) {
+func PeerPropagateBlock(block blockchain.Block) {
 	for addr, peer := range PeerList {
 		empty := new(Empty)
-		args := PropagateBlockArgs{block.Block, block.TTL}
+		args := PropagateBlockArgs{block, TTL}
 		err := peer.Client.Call("Peer.PropagateBlock", args, &empty)
 		if !CheckError(err, "PeerPropagateBlock:"+addr){
 			peer.LastHeartBeat = time.Now()
@@ -367,17 +418,16 @@ func main() {
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
 
-	// Channels for sending propagation messages too the peer manager.
-	pop := make(chan PropagateOpArgs, 10)
-	pblock := make(chan PropagateBlockArgs, 10)
 
 	// 2. Setup Miner-Miner Listener
-	go listenPeerRpc(ln, MinerInstance, pop, pblock)
+	go listenPeerRpc(ln, MinerInstance)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
 
+	pop := make(chan blockchain.Operation)
+	pblock := make(chan blockchain.Block)
 	// 3. Setup Miner Heartbeat Manager
 	go ManageConnections(pop, pblock)
 
