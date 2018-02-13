@@ -249,16 +249,16 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
-	if VerifyBlock(newBlock) {
+	hash := GetBlockHash(newBlock)
+	if _, ok := BlockHashMap[hash]; !ok && VerifyBlock(newBlock) {
 		// Create a new node for newBlock and append it to BlockNodeArray
 		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
 		BlockNodeArray = append(BlockNodeArray, newBlockNode)
 
 		// Create an entry for newBlock in BlockHashMap
 		childIndex := len(BlockNodeArray) - 1
-		childHash := GetBlockHash(newBlock)
+		BlockHashMap[hash] = childIndex
 
-		BlockHashMap[childHash] = childIndex
 		// Update the entry for newBlock's parent in BlockNodeArray
 		parentIndex := BlockHashMap[newBlock.PrevHash]
 		parentBlockNode := &BlockNodeArray[parentIndex]
