@@ -19,6 +19,13 @@ import (
 
 const LOG_VALIDATION = true
 
+
+	/*******************
+	TODO: Delay evaluation of pixel array
+		  until the entire block chain is built
+		  to account for deletes
+	*******************/
+
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
 		pubkey string, blocks []blockchain.Block) error {

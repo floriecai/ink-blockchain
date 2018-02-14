@@ -431,7 +431,7 @@ func CheckLiveliness() {
 // 3. Receive job updates via the given channels
 // 4. TODO: Return solution
 
-func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) {
+func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block, pblock chan PropagateBlockArgs) {
 	// Channel for receiving the final block w/ nonce from workers
 	solved := make(chan blockchain.Block)
 
@@ -474,7 +474,7 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) 
 			done = NoopJob(GetBlockHash(block), solved)
 
 		case sol := <-solved:
-			fmt.Println("got a solution: ", sol)
+			fmt.Println("got a solution", sol.Nonce)
 
 			// Kill current job
 			close(done)
@@ -483,8 +483,9 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block) 
 			solved = make(chan blockchain.Block)
 
 			// Insert block into our data structure
-			// TODO: Do we insert it here or upstream via a channel?
 			InsertBlock(sol)
+			pblock <- PropagateBlockArgs{sol, TTL}
+
 			//fmt.Println("inserted solution: ", BlockNodeArray)
 			// Start a job on the longest block in the chain
 			blockchain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
@@ -638,10 +639,10 @@ func main() {
 	MinerInstance.Addr = addr
 
 	// 2. Create communication channels between goroutines
-	pop := make(chan PropagateOpArgs, 8)
-	pblock := make(chan PropagateBlockArgs, 8)
-	sop := make(chan blockchain.Operation, 8)
-	sblock := make(chan blockchain.Block, 8)
+	pop := make(chan PropagateOpArgs, 1)
+	pblock := make(chan PropagateBlockArgs, 1)
+	sop := make(chan blockchain.Operation, 1)
+	sblock := make(chan blockchain.Block, 1)
 
 	// 3. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock)
@@ -658,7 +659,7 @@ func main() {
 	go ManageConnections(pop, pblock)
 
 	// 5. Setup Problem Solving
-	go ProblemSolver(sop, sblock)
+	go ProblemSolver(sop, sblock, pblock)
 
 	// 6. Setup Client-Miner Listener (this thread)
 	OpenLibMinerConn(":0")

@@ -80,7 +80,7 @@ func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
 func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
-	fmt.Println("Hb called")
+	//fmt.Println("Hb called")
 	return nil
 }
 
@@ -172,10 +172,16 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
 	// - Validate the block
-	// - Add block to block chain.
 
 	validateLock.Lock()
 	defer validateLock.Unlock()
+
+	/*******************
+	TODO: Validate(Block)
+	*******************/
+
+	// - Add block to block chain.
+	InsertBlock(args.Block)
 
 	// Propagate block to list of connected peers.
 
