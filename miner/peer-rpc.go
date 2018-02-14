@@ -178,11 +178,10 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	validateLock.Lock()
 	defer validateLock.Unlock()
 
-	/*******************
-	TODO: Validate(Block)
-	*******************/
-
 	longest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+
+	p.miner.ValidateBlock(args.Block, longest)
+
 	length := len(longest)
 	lastblock := longest[length-1]
 

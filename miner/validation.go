@@ -18,10 +18,39 @@ import (
 const LOG_VALIDATION = true
 
 
+func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) error {
+	fmt.Println("ValidateBlock::TODO: Unfinished")
+	return nil
+}
+
+// Checks if there are overlaps and enough ink
+func ValidateOperation(op blockchain.Operation, pubKey string) error {
+	shape, err := MinerInstance.getShapeFromOp(op)
+	if err != nil {
+		return err
+	}
+
+	subarr, inkRequired := shape.SubArrayAndCost()
+
+	validateLock.Lock()
+	defer validateLock.Unlock()
+
+	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 	/*******************
 	TODO: Delay evaluation of pixel array
 		  until the entire block chain is built
 		  to account for deletes
+	
+	TODO: CalculateInk(pubkey) can calculate how much ink a public key has
 	*******************/
 
 // Function used to determine if an add operation is allowed on the blockchain.
