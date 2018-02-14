@@ -211,9 +211,12 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 
 		// Keep looping until there are NumValidate blocks
 		for {
-			blockHash := GetBlockOfShapeHash(opInfo)
+			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
 			_, numBlocksFollowing := GetLongestPath(blockHash, BlockHashMap, BlockNodeArray)
-			if GetBlockOfShapeHash(opInfo) != "" && numBlocksFollowing >= int(drawReq.ValidateNum) {
+			if numBlocksFollowing >= int(drawReq.ValidateNum) {
+				response.InkRemaining = uint32(CalculateInk(pubKeyString))
+				response.ShapeHash = opInfo.OpSig
+				response.BlockHash = blockHash
 				return nil
 			}
 		}
@@ -232,9 +235,20 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		json.Unmarshal(req.Msg, &deleteReq)
 		pubKeyString := utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)
 
-		// TODO get the AddOp of deleteReq.Op
+		// Find the ADD Operation
+		addBlockHash := GetBlockHashOfShapeHash(deleteReq.ShapeHash)
+		if addBlockHash == "" {
+			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
+		}
+
+		addBlock := GetBlock(addBlockHash)
 		var addOpInfo blockchain.OperationInfo
-		// addOpInfo = GetBlockOfShapeHash()
+		for _, addInfo := range addBlock.OpHistory {
+			if addInfo.OpSig == deleteReq.ShapeHash {
+				addOpInfo = addInfo
+				break
+			}
+		}
 
 		if addOpInfo.Op.OpType != blockchain.ADD {
 			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
@@ -273,16 +287,14 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
 		}
 
-		// Keep looping until 1) There are enough blocks that follow 2)
+		// Keep looping until there are at least NumValidate blocks that follow
 		for {
-			blockHash := GetBlockOfShapeHash(opInfo)
+			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
+			_, numBlocksFollowing := GetLongestPath(blockHash, BlockHashMap, BlockNodeArray)
 
-			if blockHash != "" {
-				_, numBlocksFollowing := GetLongestPath(blockHash, BlockHashMap, BlockNodeArray)
-				if numBlocksFollowing >= int(deleteReq.ValidateNum) {
-					response.InkRemaining = uint32(0) // FIXME: Call CalculateInk
-					return nil
-				}
+			if numBlocksFollowing > -int(deleteReq.ValidateNum) {
+				response.InkRemaining = uint32(CalculateInk(pubKeyString))
+				return nil
 			}
 		}
 	}
@@ -658,7 +670,7 @@ func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 	return done
 }
 
-// Initiate the a job with a predefined op array
+// Initiate a job with a predefined op array
 func OpJob(hash string, Ops []blockchain.OperationInfo, solved chan blockchain.Block) chan bool {
 	CurrJobId++
 	block := blockchain.Block{PrevHash: hash,
@@ -755,12 +767,12 @@ func ValidateOperation(op blockchain.Operation, pubKey string) error {
 
 // Checks if this operation has already been incorporated in the longest path of the blockchain
 // If it is in the blockchain, return the block where the operation is in
-func GetBlockOfShapeHash(opInfo blockchain.OperationInfo) string {
+func GetBlockHashOfShapeHash(opSig string) string {
 	blockchain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 
 	for _, block := range blockchain {
 		for _, op := range block.OpHistory {
-			if op.OpSig == opInfo.OpSig {
+			if op.OpSig == opSig {
 				blockByteData, _ := json.Marshal(block)
 				hashedBlock := utils.ComputeHash(blockByteData)
 				return hex.EncodeToString(hashedBlock)
