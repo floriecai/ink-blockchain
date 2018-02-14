@@ -167,7 +167,7 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 // Possible Errors:
 // - OutOfBoundsError
 // - InvalidShapeSvgStringError
-func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool) (path shapelib.Path, err error) {
+func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeFilled bool) (path shapelib.Path, err error) {
 	fmt.Println("svgPaths")
 
 	maxX := -1
@@ -235,12 +235,13 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool) (path s
 	}
 
 	path = shapelib.Path{
-		XMax:   maxX,
-		YMax:   maxY,
-		XMin:   minX,
-		YMin:   minY,
-		Points: points,
-		Filled: filled}
+		XMax:         maxX,
+		YMax:         maxY,
+		XMin:         minX,
+		YMin:         minY,
+		Points:       points,
+		Filled:       filled,
+		StrokeFilled: strokeFilled}
 
 	fmt.Printf("\n\n")
 	fmt.Printf("Paths is: %#v", path)

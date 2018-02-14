@@ -15,9 +15,9 @@ var sqrt = math.Sqrt
 /* PATH_FUNCTIONS */
 
 // Create a new Path struct from a Point slice.
-func NewPath(points []Point, filled bool) Path {
+func NewPath(points []Point, filled bool, strokeFilled bool) Path {
 	if points == nil {
-		return Path{nil, false, 0, 0, 0, 0}
+		return Path{nil, false, false, 0, 0, 0, 0}
 	}
 
 	xMin := points[0].X
@@ -42,9 +42,11 @@ func NewPath(points []Point, filled bool) Path {
 		}
 	}
 
-	return Path{points, filled, xMin, xMax, yMin, yMax}
+	return Path{points, filled, strokeFilled, xMin, xMax, yMin, yMax}
 }
-// Generate a sub array for the Path object.  // Will fill based on the Filled field of Path.
+
+// Generate a sub array for the Path object.
+// Will fill based on the Filled field of Path.
 func (p Path) SubArray() PixelSubArray {
 	// Create a new sub array that can fit the Path
 	sub := NewPixelSubArray(p.XMin, p.XMax, p.YMin, p.YMax)
@@ -174,6 +176,23 @@ func (p Path) Area() int {
 	return int(math.Abs(sum) + 0.5)
 }
 
+// Compute sum of area and perimeter of the path
+func (p Path) AreaPlusPerim() int {
+	sum := float64(0)
+
+	for i := 0; i < len(p.Points)-1; i++ {
+		x1 := float64(p.Points[i].X)
+		x2 := float64(p.Points[i+1].X)
+		y1 := float64(p.Points[i].Y)
+		y2 := float64(p.Points[i+1].Y)
+
+		sum += sqrt(pow(x2-x1, 2) + pow(y2-y1, 2))
+		sum += 0.5 * (x1*y2 - x2*y1)
+	}
+
+	return int(math.Abs(sum) + 0.5)
+}
+
 // Returns the sub array for the path, as well as the cost. The cost is computed
 // as follows:
 // - If Filled == false, call TotalLength()
@@ -199,7 +218,11 @@ func (p Path) SubArrayAndCost() (PixelSubArray, int) {
 	if hasMoved {
 		return subarr, subarr.PixelsFilled()
 	} else {
-		return subarr, p.Area()
+		if p.StrokeFilled {
+			return subarr, p.AreaPlusPerim()
+		} else {
+			return subarr, p.Area()
+		}
 	}
 }
 
@@ -207,8 +230,8 @@ func (p Path) SubArrayAndCost() (PixelSubArray, int) {
 
 // Basic. Here in the case that someone doesn't want to
 // manually create a circle struct
-func NewCircle(xc, yc, radius int, filled bool) Circle {
-	return Circle{Point{xc, yc, false}, radius, filled}
+func NewCircle(xc, yc, radius int, filled bool, strokeFilled bool) Circle {
+	return Circle{Point{xc, yc, false}, radius, filled, strokeFilled}
 }
 
 // Compute 2pi * r
@@ -256,12 +279,25 @@ func (c Circle) Area() int {
 	return int(math.Pi * floatR * floatR + 0.5)
 }
 
+// Sum circ and area
+func (c Circle) AreaPlusCirc() int {
+	floatR := float64(c.R)
+	circ := 2.0 * math.Pi * floatR
+	area := math.Pi * floatR * floatR
+
+	return int(circ + area + 0.5)
+}
+
 // Return subarray and cost of the circle.
 func (c Circle) SubArrayAndCost() (PixelSubArray, int) {
 	subarr := c.SubArray()
 
 	if c.Filled {
-		return subarr, c.Area()
+		if c.StrokeFilled {
+			return subarr, c.AreaPlusCirc()
+		} else {
+			return subarr, c.Area()
+		}
 	} else {
 		return subarr, c.Circumference()
 	}
