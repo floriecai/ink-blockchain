@@ -7,19 +7,27 @@ const (
 	DELETE
 )
 
+type ShapeHash struct {
+	OpNum uint64 // Unique ID for each shapehash
+}
+
 type Operation struct {
-	ShapeHash string
-	OpSig     string
 	OpType    OpType
-	SVGOp     string
+	SVGString string // svgString passed in by the operation
 	Fill      string
 	Stroke    string
-	PubKey    string
+	OpNum     uint64 // Unique id for operations
+}
+
+type OperationInfo struct {
+	OpSig  string // The shapehash that we will return
+	PubKey string
+	Op     Operation
 }
 
 type Block struct {
 	PrevHash    string
-	OpHistory   []Operation
+	OpHistory   []OperationInfo
 	MinerPubKey string
 	Nonce       uint32
 }

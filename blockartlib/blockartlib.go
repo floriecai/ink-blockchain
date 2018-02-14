@@ -10,6 +10,7 @@ package blockartlib
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -214,8 +215,9 @@ type CanvasT struct {
 // - OutOfBoundsError
 func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgString string, fill string, stroke string) (shapeHash string, blockHash string, inkRemaining uint32, err error) {
 	if canvas.Miner == nil {
-		return "", DisconnectedError(canvas.Id)
+		return "", "", uint32(0), DisconnectedError(canvas.Id)
 	}
+
 	drawRequest := libminer.DrawRequest{
 		Id:          canvas.Id,
 		ValidateNum: validateNum,
@@ -237,7 +239,6 @@ func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgS
 	return reply.ShapeHash, reply.BlockHash, reply.InkRemaining, err
 }
 
-// aDD SHAPE blocks until number of blocks (validateNum) follow current block
 // Returns the encoding of the shape as an svg string.
 // Can return the following errors:
 // - DisconnectedError
@@ -257,15 +258,6 @@ func (canvas CanvasT) GetSvgString(shapeHash string) (svgString string, err erro
 		checkError(err)
 		return "", err
 	}
-
-	// TODO fcai
-	// for i, block := range resp.Blocks {
-	// 	for j, ops := range block.Ops {
-	// 		if ops.Hash == shapeHash {
-	// 			return ops.svgString, nil
-	// 		}
-	// 	}
-	// }
 
 	return "", InvalidShapeHashError(shapeHash)
 }
@@ -384,10 +376,10 @@ func (canvas CanvasT) GetChildren(blockHash string) (blockHashes []string, err e
 
 	err = canvas.Miner.Call("LibMinerInterface.GetChildren", &req, &resp)
 
-	for i, block := range resp.Blocks {
+	for _, block := range resp.Blocks {
 		bytes, _ := json.Marshal(block)
 		hash := utils.ComputeHash(bytes)
-		blockHashes = append(blockHashes, hash)
+		blockHashes = append(blockHashes, hex.EncodeToString(hash))
 	}
 
 	return blockHashes, err

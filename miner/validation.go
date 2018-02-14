@@ -13,15 +13,16 @@ package main
 
 import (
 	"fmt"
-	"../shapelib"
+
 	"../blockchain"
+	"../shapelib"
 )
 
 const LOG_VALIDATION = true
 
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
-		pubkey string, blocks []blockchain.Block) error {
+	pubkey string, blocks []blockchain.Block) error {
 	if LOG_VALIDATION {
 		fmt.Println("checkInkAndConflicts called")
 	}
@@ -48,16 +49,17 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 		}
 
 		for j := 0; j < numOps; j++ {
-			op := block.OpHistory[j]
+			opInfo := block.OpHistory[j]
+			op := opInfo.Op
 			path, err := m.getShapeFromOp(op)
 			if err != nil {
-				fmt.Println("CRITICAL ERROR, BAD OP IN BLOCKCHAIN");
+				fmt.Println("CRITICAL ERROR, BAD OP IN BLOCKCHAIN")
 				continue
 			}
 
 			subarr, cost := path.SubArrayAndCost()
 
-			if op.PubKey != pubkey {
+			if opInfo.PubKey != pubkey {
 				pixelarr.MergeSubArray(subarr)
 			} else {
 				// Don't fill in the pixels for the same pubkey,
@@ -107,10 +109,10 @@ func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Bl
 		block := blocks[i]
 
 		for j := 0; j < len(block.OpHistory); j++ {
-			op := block.OpHistory[j]
+			opInfo := block.OpHistory[j]
 
-			if op.PubKey == pubkey && op.ShapeHash == sHash {
-				if op.OpType == blockchain.ADD {
+			if opInfo.PubKey == pubkey && opInfo.OpSig == sHash {
+				if opInfo.Op.OpType == blockchain.ADD {
 					delAllowed = true
 				} else {
 					delAllowed = false
@@ -120,7 +122,7 @@ func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Bl
 		}
 	}
 
-	breakOuterLoop:
+breakOuterLoop:
 
 	if !delAllowed {
 		return fmt.Errorf("Delete operation not allowed")

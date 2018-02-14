@@ -2,11 +2,12 @@ package pow
 
 import (
 	"crypto/md5"
-	"../blockchain"
-	"encoding/json"
 	"encoding/hex"
-	"strings"
+	"encoding/json"
 	"fmt"
+	"strings"
+
+	"../blockchain"
 )
 
 // Return true if hex representation of hash has exactly N trailing zeroes
@@ -22,7 +23,7 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 	fmt.Println("starting operation with start point: ", start)
 	for {
 		select {
-		case <- done:
+		case <-done:
 			fmt.Println("job done, stopping")
 			return
 		default:
