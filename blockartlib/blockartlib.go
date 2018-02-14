@@ -213,6 +213,9 @@ type CanvasT struct {
 // - ShapeOverlapError
 // - OutOfBoundsError
 func (canvas CanvasT) AddShape(validateNum uint8, shapeType ShapeType, shapeSvgString string, fill string, stroke string) (shapeHash string, blockHash string, inkRemaining uint32, err error) {
+	if canvas.Miner == nil {
+		return "", DisconnectedError(canvas.Id)
+	}
 	drawRequest := libminer.DrawRequest{
 		Id:          canvas.Id,
 		ValidateNum: validateNum,
@@ -382,10 +385,8 @@ func (canvas CanvasT) GetChildren(blockHash string) (blockHashes []string, err e
 	err = canvas.Miner.Call("LibMinerInterface.GetChildren", &req, &resp)
 
 	for i, block := range resp.Blocks {
-		h := md5.New()
 		bytes, _ := json.Marshal(block)
-		h.Write(bytes)
-		hash := hex.EncodeToString(h.Sum(nil))
+		hash := utils.ComputeHash(bytes)
 		blockHashes = append(blockHashes, hash)
 	}
 
