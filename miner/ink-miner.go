@@ -604,11 +604,7 @@ func CheckLiveliness() {
 // 3. Receive job updates via the given channels
 // 4. TODO: Return solution
 
-<<<<<<< HEAD
-func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block, pblock chan PropagateBlockArgs) {
-=======
-func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Block) {
->>>>>>> 1566a2ffbc206bcce29139c51e6fa908a318574b
+func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Block, pblock chan PropagateBlockArgs) {
 	// Channel for receiving the final block w/ nonce from workers
 	solved := make(chan blockchain.Block)
 
@@ -768,28 +764,6 @@ func GetBlockHash(block blockchain.Block) string {
 	return hash
 }
 
-// Checks if there are overlaps and enough ink
-func ValidateOperation(op blockchain.Operation, pubKey string) error {
-	shape, err := MinerInstance.getShapeFromOp(op)
-	if err != nil {
-		return err
-	}
-
-	subarr, inkRequired := shape.SubArrayAndCost()
-
-	validateLock.Lock()
-	defer validateLock.Unlock()
-
-	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Checks if this operation has already been incorporated in the longest path of the blockchain
 // If it is in the blockchain, return the block where the operation is in
 func GetBlockHashOfShapeHash(opSig string) string {
@@ -826,18 +800,11 @@ func main() {
 	MinerInstance.Addr = addr
 
 	// 2. Create communication channels between goroutines
-<<<<<<< HEAD
 	pop := make(chan PropagateOpArgs, 1)
 	pblock := make(chan PropagateBlockArgs, 1)
-	sop := make(chan blockchain.Operation, 1)
+	sop := make(chan blockchain.OperationInfo, 1)
 	sblock := make(chan blockchain.Block, 1)
-=======
-	pop := make(chan PropagateOpArgs, 8)
-	pblock := make(chan PropagateBlockArgs, 8)
-	sop := make(chan blockchain.OperationInfo, 8)
-	sblock := make(chan blockchain.Block, 8)
 	peerconn := make(chan net.Addr, 1)
->>>>>>> 1566a2ffbc206bcce29139c51e6fa908a318574b
 
 	// 3. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock, peerconn)

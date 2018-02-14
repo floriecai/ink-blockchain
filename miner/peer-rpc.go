@@ -182,11 +182,12 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 	p.miner.ValidateBlock(args.Block, longest)
 
+	// - Add block to block chain.
+	InsertBlock(args.Block)
+
 	length := len(longest)
 	lastblock := longest[length-1]
 
-	// - Add block to block chain.
-	InsertBlock(args.Block)
 
 	// Propagate block to list of connected peers.
 	args.TTL--
@@ -197,7 +198,7 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	newlongest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 	newlength := len(newlongest)
 	newlastblock := newlongest[newlength-1]
-	if newlength >= length && newlastblock != lastblock {
+	if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
 		p.blkSCh <- args.Block
 	}
 
