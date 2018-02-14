@@ -3,10 +3,6 @@
 Purpose of this file is to contain the validation functions needed for the add
 and delete operations for shapes in the blockchain.
 
-Need to figure out exactly what to check. There could be multiple longest paths.
-It could be that there is a conflict on one and not the other. Need to think
-carefully about this when calling the functions in this file.
-
 */
 
 package main
@@ -15,6 +11,7 @@ import (
 	"fmt"
 
 	"../blockchain"
+	"../libminer"
 	"../shapelib"
 )
 
@@ -22,7 +19,7 @@ const LOG_VALIDATION = true
 
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
-	pubkey string, blocks []blockchain.Block) error {
+	pubkey string, blocks []blockchain.Block, svgString string) error {
 	if LOG_VALIDATION {
 		fmt.Println("checkInkAndConflicts called")
 	}
@@ -82,12 +79,12 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 
 	if inkRequired > int(pubkeyInk) {
 		fmt.Println("checkInkAndConflicts: insufficient ink")
-		return fmt.Errorf("insufficient ink")
+		return libminer.InsufficientInkError(uint32(inkRequired))
 	}
 
 	if pixelarr.HasConflict(subarr) {
 		fmt.Println("checkInkAndConflicts: conflict found")
-		return fmt.Errorf("conflict found")
+		return libminer.ShapeOverlapError(svgString)
 	}
 
 	return nil
@@ -125,7 +122,7 @@ func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Bl
 breakOuterLoop:
 
 	if !delAllowed {
-		return fmt.Errorf("Delete operation not allowed")
+		return libminer.ShapeOwnerError(sHash)
 	}
 
 	return nil

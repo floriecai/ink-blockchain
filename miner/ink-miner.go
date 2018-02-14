@@ -756,7 +756,7 @@ func ValidateOperation(op blockchain.Operation, pubKey string) error {
 	defer validateLock.Unlock()
 
 	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks)
+	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
 
 	if err != nil {
 		return err
