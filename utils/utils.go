@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"../blockchain"
 	"../libminer"
 	"../shapelib"
 )
@@ -70,6 +71,20 @@ func (c ZCommand) GetY() int        { return -1 }
 func (c ZCommand) IsRelative() bool { return false }
 
 type SVGPath []SVGCommand
+
+// Given a blockchain.OperationInfo, returns the corresponding html svg element
+// i.e. <svg d="M 0 0 H 10 10 v 20 Z" fill="transparent" stroke="red">
+func GetHTMLSVGString(op blockchain.Operation) string {
+	var fill, stroke string
+	if op.OpType == blockchain.DELETE {
+		fill = "white"
+		stroke = "white"
+	} else {
+		fill = op.Fill
+		stroke = op.Stroke
+	}
+	return fmt.Sprintf("<svg d=\"%s\" fill=\"%s\" stroke=\"%s\">", op.SVGString, fill, stroke)
+}
 
 // Parses a string into a list of SVGCommands
 // Returns an ordered list of SVGCommands that denote an SVGPath

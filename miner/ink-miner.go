@@ -328,6 +328,49 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 	return err
 }
 
+func (lmi *LibMinerInterface) GetBlock(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		var blockRequest libminer.BlockRequest
+		json.Unmarshal(req.Msg, &blockRequest)
+
+		if blockIndex, ok := BlockHashMap[blockRequest.BlockHash]; ok {
+			blockNode := BlockNodeArray[blockIndex]
+			response.Blocks = []blockchain.Block{blockNode.Block}
+			return nil
+		}
+
+		err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
+		return err
+	}
+
+	err = fmt.Errorf("invalid user")
+	return err
+}
+
+func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.OpResponse) (err error) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		var opRequest libminer.OpRequest
+		json.Unmarshal(req.Msg, &opRequest)
+
+		blockHash := GetBlockHashOfShapeHash(opRequest.ShapeHash)
+		if blockHash == "" {
+			return libminer.InvalidShapeHashError(opRequest.ShapeHash)
+		}
+
+		blockIndex := BlockHashMap[blockHash]
+		for _, opInfo := range BlockNodeArray[blockIndex].Block.OpHistory {
+			if opInfo.OpSig == opRequest.ShapeHash {
+				response.Op = opInfo.Op
+			}
+		}
+
+		return libminer.InvalidShapeHashError(opRequest.ShapeHash)
+	}
+
+	err = fmt.Errorf("invalid user")
+	return err
+}
+
 /*******************************
 | Blockchain functions
 ********************************/

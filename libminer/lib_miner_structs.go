@@ -42,6 +42,11 @@ type RegisterRequest struct {
 	Msg []byte
 }
 
+type OpRequest struct {
+	Id        int
+	ShapeHash string
+}
+
 type BlockRequest struct {
 	Id        int
 	BlockHash string
@@ -62,6 +67,10 @@ type DrawResponse struct {
 	ShapeHash    string
 	BlockHash    string
 	InkRemaining uint32
+}
+
+type OpResponse struct {
+	Op blockchain.Operation
 }
 
 type BlocksResponse struct {

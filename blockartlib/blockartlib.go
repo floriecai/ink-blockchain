@@ -248,18 +248,19 @@ func (canvas CanvasT) GetSvgString(shapeHash string) (svgString string, err erro
 		return "", DisconnectedError(canvas.Id)
 	}
 
-	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	msg, _ := json.Marshal(libminer.OpRequest{Id: canvas.Id, ShapeHash: shapeHash})
 	req := getRPCRequest(msg, &canvas.PrivKey)
-	var resp libminer.BlocksResponse
+	var resp libminer.OpResponse
 
-	err = canvas.Miner.Call("LibMinerInterface.GetBlockChain", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetOp", &req, &resp)
 
 	if err != nil {
 		checkError(err)
 		return "", err
 	}
 
-	return "", InvalidShapeHashError(shapeHash)
+	svgString = utils.GetHTMLSVGString(resp.Op)
+	return svgString, InvalidShapeHashError(shapeHash)
 }
 
 // Returns the amount of ink currently available.
@@ -319,24 +320,22 @@ func (canvas CanvasT) GetShapes(blockHash string) (shapeHashes []string, err err
 		return shapeHashes, DisconnectedError(string(canvas.Id))
 	}
 
-	msg, _ := json.Marshal(libminer.GenericRequest{Id: canvas.Id})
+	msg, _ := json.Marshal(libminer.BlockRequest{Id: canvas.Id, BlockHash: blockHash})
 	req := getRPCRequest(msg, &canvas.PrivKey)
 	var resp libminer.BlocksResponse
 
-	err = canvas.Miner.Call("LibMinerInterface.GetBlockChain", &req, &resp)
+	err = canvas.Miner.Call("LibMinerInterface.GetBlock", &req, &resp)
 
 	if err != nil {
-		log.Println("Error in Miner.GetBlockChain in GetShapes")
+		log.Println("Error in Miner.GetShapes in GetShapes")
 		checkError(err)
 		return shapeHashes, err
 	}
 
-	// TODO fcai
-	// for i, block := resp.Blocks {
-	// 	if block.Hash == blockHash {
-	// 		return block.Ops, nil
-	// 	}
-	// }
+	shapeHashes = make([]string, 0)
+	for _, opInfo := range resp.Blocks[0].OpHistory {
+		shapeHashes = append(shapeHashes, opInfo.OpSig)
+	}
 
 	return shapeHashes, InvalidBlockHashError(blockHash)
 }
