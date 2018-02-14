@@ -52,7 +52,6 @@ type RegisterResponse struct {
 	Id         int
 	CanvasXMax uint32
 	CanvasYMax uint32
-	//GenesisBlockHash string
 }
 
 type InkResponse struct {

@@ -147,6 +147,7 @@ func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libmin
 
 func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
 		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		return nil
 	}
@@ -157,6 +158,7 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
 		var drawReq libminer.DrawRequest
 		json.Unmarshal(req.Msg, &drawReq)
 
@@ -222,8 +224,14 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 
 func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		//children := GetBlockChildren(req.BlockHash)
-		//response.Blocks = children
+		var blockRequest libminer.BlockRequest
+		json.Unmarshal(req.Msg, &blockRequest)
+		if _, ok := BlockHashMap[blockRequest.BlockHash]; !ok {
+			err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
+			return err
+		}
+		children := GetBlockChildren(blockRequest.BlockHash)
+		response.Blocks = children
 		return nil
 	}
 	err = fmt.Errorf("invalid user")
@@ -282,6 +290,52 @@ func VerifyBlock(block blockchain.Block) bool {
 	}
 }
 
+
+// Returns an array of Blocks that are on the longest path
+func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) []blockchain.Block {
+	blockChain := make([]blockchain.Block, 0)
+
+	initBIndex := blockHashMap[initBlockHash]
+	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
+
+	if len(blockNodeArray[initBIndex].Children) == 0 {
+		return blockChain
+	}
+
+	var longestPath []blockchain.Block
+	maxLen := -1
+
+	for _, childIndex := range blockNodeArray[initBIndex].Children {
+		child := blockNodeArray[childIndex]
+
+		childHash := GetBlockHash(child.Block)
+		childPath := GetLongestPath(childHash, blockHashMap, blockNodeArray)
+		if maxLen < len(childPath) {
+			maxLen = len(childPath)
+			longestPath = childPath
+		}
+	}
+
+	blockChain = append(blockChain, longestPath...)
+	return blockChain
+
+}
+
+// Calculates how much ink a particular miner public key has
+func CalculateInk(minerKey string) int {
+	blockchain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	var inkAmt uint32 = 0
+	for _, block := range blockchain {
+		if block.MinerPubKey == minerKey {
+			if len(block.OpHistory) == 0 {
+				inkAmt += MinerInstance.Settings.InkPerNoOpBlock
+			} else {
+				inkAmt += MinerInstance.Settings.InkPerOpBlock
+			}
+		}
+	}
+	return int(inkAmt)
+}
 /*******************************
 | Server Management functions
 ********************************/
@@ -304,10 +358,8 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 	}
 }
 
-func (msi *MinerServerInterface) GetPeers() {
-	var addrSet []net.Addr
+func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 	var empty Empty
-	msi.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
 	for _, addr := range addrSet {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
@@ -328,7 +380,7 @@ func (msi *MinerServerInterface) GetPeers() {
 
 			client := rpc.NewClient(conn)
 
-			args := ConnectArgs{conn.LocalAddr().String()}
+			args := ConnectArgs{MinerInstance.Addr}
 			err = client.Call("Peer.Connect", args, &empty)
 			if CheckError(err, "GetPeers:Connect") {
 				continue
@@ -349,7 +401,8 @@ func (msi *MinerServerInterface) GetPeers() {
 // 4. Request new nodes from server and connect to them when peers drop too low
 // 5. When a operation or block is sent through the channel, heartbeat will be replaced by Propagate<Type>
 // This is the central point of control for the peer connectivity
-func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs) {
+
+func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs, peerconn chan net.Addr) {
 	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
@@ -358,7 +411,11 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs)
 		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerHeartBeats()
-		case op := <-pop:
+		case addr := <- peerconn: 
+			// Connection request from peerRpc
+			addrSet := []net.Addr{addr}
+			MinerInstance.MSI.GetPeers(addrSet)
+		case op := <- pop:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerPropagateOp(op)
 		case block := <-pblock:
@@ -367,7 +424,9 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs)
 		default:
 			CheckLiveliness()
 			if len(PeerList) < int(MinerInstance.Settings.MinNumMinerConnections) {
-				MinerInstance.MSI.GetPeers()
+				var addrSet []net.Addr
+				MinerInstance.MSI.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
+				MinerInstance.MSI.GetPeers(addrSet)
 			}
 		}
 	}
@@ -582,36 +641,6 @@ func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
 }
 
-// Returns an array of Blocks that are on the longest path
-func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) []blockchain.Block {
-	blockChain := make([]blockchain.Block, 0)
-
-	initBIndex := blockHashMap[initBlockHash]
-	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
-
-	if len(blockNodeArray[initBIndex].Children) == 0 {
-		return blockChain
-	}
-
-	var longestPath []blockchain.Block
-	maxLen := -1
-
-	for _, childIndex := range blockNodeArray[initBIndex].Children {
-		child := blockNodeArray[childIndex]
-
-		childHash := GetBlockHash(child.Block)
-		childPath := GetLongestPath(childHash, blockHashMap, blockNodeArray)
-		if maxLen < len(childPath) {
-			maxLen = len(childPath)
-			longestPath = childPath
-		}
-	}
-
-	blockChain = append(blockChain, longestPath...)
-	return blockChain
-
-}
-
 func GetBlockHash(block blockchain.Block) string {
 	h := md5.New()
 	bytes, _ := json.Marshal(block)
@@ -642,9 +671,10 @@ func main() {
 	pblock := make(chan PropagateBlockArgs, 8)
 	sop := make(chan blockchain.Operation, 8)
 	sblock := make(chan blockchain.Block, 8)
+	peerconn := make(chan net.Addr, 1)
 
 	// 3. Setup Miner-Miner Listener
-	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock)
+	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock, peerconn)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
@@ -655,7 +685,7 @@ func main() {
 	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
 
 	// 4. Setup Miner Heartbeat Manager
-	go ManageConnections(pop, pblock)
+	go ManageConnections(pop, pblock, peerconn)
 
 	// 5. Setup Problem Solving
 	go ProblemSolver(sop, sblock)

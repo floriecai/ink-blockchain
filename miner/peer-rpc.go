@@ -38,13 +38,14 @@ type PeerRpc struct {
 	blkCh chan PropagateBlockArgs
 	opSCh  chan blockchain.Operation
 	blkSCh chan blockchain.Block
+	reqCh chan net.Addr
 }
 
 // Empty struct. Use for filling required but unused function parameters.
 type Empty struct{}
 
 type ConnectArgs struct {
-	Peer_addr string
+	Addr net.Addr
 }
 
 type PropagateOpArgs struct {
@@ -70,16 +71,16 @@ type GetBlockChainArgs struct {
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
 func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
-	fmt.Println("Connect called by: ", args.Peer_addr)
 
-	// - Add the peer miner to list of connected peers.
-	// - Start a heartbeat for the new miner.
+	// - Send through request channel to Connection Manager to connect next time
+	p.reqCh <- args.Addr
+	fmt.Println("Connect called by: ", args.Addr.String())
 
 	return nil
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
-func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
+func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
 	fmt.Println("Hb called")
 	return nil
 }
@@ -204,8 +205,8 @@ func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 // This will initialize the miner peer listener.
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 		blkCh chan PropagateBlockArgs, opSCh chan blockchain.Operation,
-		blkSCh chan blockchain.Block) {
-	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh}
+		blkSCh chan blockchain.Block, reqCh chan net.Addr) {
+	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
