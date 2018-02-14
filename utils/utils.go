@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"crypto/ecdsa"
 	"crypto/md5"
+	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -234,4 +237,9 @@ func ComputeHash(data []byte) []byte {
 	h := md5.New()
 	h.Write(data)
 	return h.Sum(nil)
+}
+
+func GetPublicKeyString(pubKey ecdsa.PublicKey) string {
+	publicKeyBytes, _ := x509.MarshalPKIXPublicKey(&pubKey)
+	return hex.EncodeToString(publicKeyBytes)
 }

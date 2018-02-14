@@ -21,10 +21,11 @@ import (
 	"net"
 	"net/rpc"
 
+	"sync"
+
 	"../blockchain"
 	"../shapelib"
 	"../utils"
-	"sync"
 )
 
 /*******************
@@ -33,28 +34,29 @@ import (
 
 // Struct for maintaining state of the PeerRpc
 type PeerRpc struct {
-	miner *Miner
-	opCh  chan PropagateOpArgs
-	blkCh chan PropagateBlockArgs
-	opSCh  chan blockchain.Operation
+	miner  *Miner
+	opCh   chan PropagateOpArgs
+	blkCh  chan PropagateBlockArgs
+	opSCh  chan blockchain.OperationInfo
 	blkSCh chan blockchain.Block
+	reqCh  chan net.Addr
 }
 
 // Empty struct. Use for filling required but unused function parameters.
 type Empty struct{}
 
 type ConnectArgs struct {
-	Peer_addr string
+	Addr net.Addr
 }
 
 type PropagateOpArgs struct {
-	Op blockchain.Operation
-	TTL int
+	OpInfo blockchain.OperationInfo
+	TTL    int
 }
 
 type PropagateBlockArgs struct {
 	Block blockchain.Block
-	TTL int
+	TTL   int
 }
 
 type GetBlockChainArgs struct {
@@ -70,10 +72,10 @@ type GetBlockChainArgs struct {
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
 func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
-	fmt.Println("Connect called by: ", args.Peer_addr)
 
-	// - Add the peer miner to list of connected peers.
-	// - Start a heartbeat for the new miner.
+	// - Send through request channel to Connection Manager to connect next time
+	p.reqCh <- args.Addr
+	fmt.Println("Connect called by: ", args.Addr.String())
 
 	return nil
 }
@@ -86,7 +88,7 @@ func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
 
 // Get a shape interface from an operation.
 func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
-	pathlist, err := utils.GetParsedSVG(op.SVGOp)
+	pathlist, err := utils.GetParsedSVG(op.SVGString)
 	if err == nil {
 		// Error is nil, should be parsable into shapelib.Path
 		return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
@@ -107,9 +109,9 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 
 // Get a shapelib.Path from an operation
 func (m Miner) getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
-	pathlist, err := utils.GetParsedSVG(op.SVGOp)
+	pathlist, err := utils.GetParsedSVG(op.SVGString)
 	if err != nil {
-		fmt.Println("PropagateOp err:", err);
+		fmt.Println("PropagateOp err:", err)
 		path := shapelib.NewPath(nil, false)
 		return path, err
 	}
@@ -132,7 +134,7 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	// TODO: Validate the shapehash using the public key
 
 	// Get the shapelib.Shape representation for this svg
-	shape, err := p.miner.getShapeFromOp(args.Op)
+	shape, err := p.miner.getShapeFromOp(args.OpInfo.Op)
 	if err != nil {
 		return err
 	}
@@ -142,11 +144,11 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	validateLock.Lock()
 	defer validateLock.Unlock()
 
-	blocks := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-	if args.Op.OpType == blockchain.ADD {
-		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.Op.PubKey, blocks)
+	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	if args.OpInfo.Op.OpType == blockchain.ADD {
+		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString)
 	} else {
-		err = p.miner.checkDeletion(args.Op.ShapeHash, args.Op.PubKey, blocks)
+		err = p.miner.checkDeletion(args.OpInfo.OpSig, args.OpInfo.PubKey, blocks)
 	}
 
 	if err != nil {
@@ -154,7 +156,7 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	}
 
 	// Update the solver. There will likely need to be additional logic somewhere here.
-	p.opSCh <- args.Op
+	p.opSCh <- args.OpInfo
 
 	// Propagate op to list of connected peers.
 	// TODO: figure out a way to optimize this... don't want to revalidate ops and stuff
@@ -180,18 +182,24 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	TODO: Validate(Block)
 	*******************/
 
+	longest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	length := len(longest)
+	lastblock := longest[length-1]
+
 	// - Add block to block chain.
 	InsertBlock(args.Block)
-
-	// Propagate block to list of connected peers.
-
-	// Update the solver. There will likely need to be additional logic somewhere here.
-	p.blkSCh <- args.Block
 
 	// Propagate block to list of connected peers.
 	args.TTL--
 	if args.TTL > 0 {
 		p.blkCh <- args
+	}
+
+	newlongest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	newlength := len(newlongest)
+	newlastblock := newlongest[newlength-1]
+	if newlength >= length && newlastblock != lastblock {
+		p.blkSCh <- args.Block
 	}
 
 	return nil
@@ -209,9 +217,9 @@ func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 
 // This will initialize the miner peer listener.
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
-		blkCh chan PropagateBlockArgs, opSCh chan blockchain.Operation,
-		blkSCh chan blockchain.Block) {
-	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh}
+	blkCh chan PropagateBlockArgs, opSCh chan blockchain.OperationInfo,
+	blkSCh chan blockchain.Block, reqCh chan net.Addr) {
+	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 

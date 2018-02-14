@@ -15,12 +15,15 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
 	"../pow"
+	"../utils"
 )
 
 const (
@@ -43,6 +46,9 @@ const (
 	MAX_THREADS = 4
 )
 
+// Global blockchain Parent->Children Map
+var ParentHashMap map[string][]int = make(map[string][]int)
+
 // Global block chain array
 var BlockNodeArray []blockchain.BlockNode
 
@@ -53,6 +59,12 @@ var BlockHashMap map[string]int = make(map[string]int)
 
 // Current Job ID
 var CurrJobId int = 0
+
+// This lock is to guarantee operations are unique, even if they have the same svgString, fill and stroke
+var (
+	OpNum   uint64 = 0
+	OpMutex *sync.Mutex
+)
 
 /*******************************
 | Structs for the miners to use internally
@@ -66,6 +78,10 @@ type Miner struct {
 	LMI        *LibMinerInterface
 	MSI        *MinerServerInterface
 	BlockChain []blockchain.BlockNode
+	POpChan    chan PropagateOpArgs
+	PBlockChan chan PropagateBlockArgs
+	SOpChan    chan blockchain.Operation
+	SBlockChan chan blockchain.Block
 }
 
 type MinerInfo struct {
@@ -147,6 +163,7 @@ func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libmin
 
 func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
 		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		return nil
 	}
@@ -157,30 +174,55 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
 		var drawReq libminer.DrawRequest
 		json.Unmarshal(req.Msg, &drawReq)
+		pubKeyString := utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)
 
+		// Create Operation
+		OpMutex.Lock()
 		op := blockchain.Operation{
-			"", // ShapeHash, FIXME
-			"", // OpSig, FIXME
 			blockchain.ADD,
 			drawReq.SVGString,
 			drawReq.Fill,
 			drawReq.Stroke,
-			""} // PubKey, FIXME
+			OpNum}
 
-		shape, err := MinerInstance.getShapeFromOp(op)
+		OpNum++
+		OpMutex.Unlock()
+
+		// Disseminate Operation
+		opBytes, _ := json.Marshal(op)
+		opSig, _ := MinerInstance.PrivKey.Sign(rand.Reader, opBytes, nil)
+		opInfo := blockchain.OperationInfo{
+			OpSig:  hex.EncodeToString(opSig),
+			PubKey: pubKeyString,
+			Op:     op}
+
+		propOpArgs := PropagateOpArgs{
+			OpInfo: opInfo,
+			TTL:    TTL}
+
+		MinerInstance.POpChan <- propOpArgs
+
+		// Check if it conflicts with the existing canvas
+		err := ValidateOperation(op, pubKeyString)
+
 		if err != nil {
 			return err
 		}
 
-		subarr, inkRequired := shape.SubArrayAndCost()
-
-		validateLock.Lock()
-		defer validateLock.Unlock()
-
-		blocks := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-		err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, "", blocks) // FIXME: PubKey
+		// Keep looping until there are NumValidate blocks
+		for {
+			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
+			_, numBlocksFollowing := GetLongestPath(blockHash, BlockHashMap, BlockNodeArray)
+			if numBlocksFollowing >= int(drawReq.ValidateNum) {
+				response.InkRemaining = uint32(CalculateInk(pubKeyString))
+				response.ShapeHash = opInfo.OpSig
+				response.BlockHash = blockHash
+				return nil
+			}
+		}
 
 		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
@@ -194,16 +236,69 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		var deleteReq libminer.DeleteRequest
 		json.Unmarshal(req.Msg, &deleteReq)
+		pubKeyString := utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)
 
-		blockChain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-		err = MinerInstance.checkDeletion(deleteReq.ShapeHash, "", blockChain) // FIXME: PubKey
+		// Find the ADD Operation
+		addBlockHash := GetBlockHashOfShapeHash(deleteReq.ShapeHash)
+		if addBlockHash == "" {
+			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
+		}
+
+		addBlock := GetBlock(addBlockHash)
+		var addOpInfo blockchain.OperationInfo
+		for _, addInfo := range addBlock.OpHistory {
+			if addInfo.OpSig == deleteReq.ShapeHash {
+				addOpInfo = addInfo
+				break
+			}
+		}
+
+		if addOpInfo.Op.OpType != blockchain.ADD {
+			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
+		}
+
+		OpMutex.Lock()
+		op := blockchain.Operation{
+			blockchain.DELETE,
+			addOpInfo.Op.SVGString,
+			addOpInfo.Op.Fill,
+			addOpInfo.Op.Stroke,
+			OpNum}
+
+		OpNum++
+		OpMutex.Unlock()
+
+		// Disseminate Operation
+		opBytes, _ := json.Marshal(op)
+		opSig, _ := MinerInstance.PrivKey.Sign(rand.Reader, opBytes, nil)
+		opInfo := blockchain.OperationInfo{
+			OpSig:  hex.EncodeToString(opSig),
+			PubKey: pubKeyString,
+			Op:     op}
+
+		propOpArgs := PropagateOpArgs{
+			OpInfo: opInfo,
+			TTL:    TTL}
+
+		MinerInstance.POpChan <- propOpArgs
+
+		// Check if DELETE is valid
+		blockChain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		err = MinerInstance.checkDeletion(deleteReq.ShapeHash, pubKeyString, blockChain)
 
 		if err != nil {
 			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
-		} else {
-			// TODO:
-			// send to solver
-			// send to connection manager
+		}
+
+		// Keep looping until there are at least NumValidate blocks that follow
+		for {
+			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
+			_, numBlocksFollowing := GetLongestPath(blockHash, BlockHashMap, BlockNodeArray)
+
+			if numBlocksFollowing > -int(deleteReq.ValidateNum) {
+				response.InkRemaining = uint32(CalculateInk(pubKeyString))
+				return nil
+			}
 		}
 	}
 
@@ -222,8 +317,14 @@ func (lmi *LibMinerInterface) GetGenesisBlock(req *libminer.Request, response *s
 
 func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		//children := GetBlockChildren(req.BlockHash)
-		//response.Blocks = children
+		var blockRequest libminer.BlockRequest
+		json.Unmarshal(req.Msg, &blockRequest)
+		if _, ok := BlockHashMap[blockRequest.BlockHash]; !ok {
+			err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
+			return err
+		}
+		children := GetBlockChildren(blockRequest.BlockHash)
+		response.Blocks = children
 		return nil
 	}
 	err = fmt.Errorf("invalid user")
@@ -236,20 +337,37 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
-	hash := GetBlockHash(newBlock)
-	if _, ok := BlockHashMap[hash]; !ok && VerifyBlock(newBlock) {
+	if VerifyBlock(newBlock) {
 		// Create a new node for newBlock and append it to BlockNodeArray
-		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
+		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: ParentHashMap[GetBlockHash(newBlock)]}
+
+		// TODO - Do we need a lock here? Can we guarantee that the childIndex below
+		// is the last one
 		BlockNodeArray = append(BlockNodeArray, newBlockNode)
 
 		// Create an entry for newBlock in BlockHashMap
 		childIndex := len(BlockNodeArray) - 1
-		BlockHashMap[hash] = childIndex
+		childHash := GetBlockHash(newBlock)
+
+		BlockHashMap[childHash] = childIndex
 
 		// Update the entry for newBlock's parent in BlockNodeArray
-		parentIndex := BlockHashMap[newBlock.PrevHash]
-		parentBlockNode := &BlockNodeArray[parentIndex]
-		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		// If the parent exists in the blockchain, simply append this new block as a child of the parent
+		// If the parent does not exist either because:
+		// 		1) It is an invalid block
+		//			- Adding this to the BlockNodeArray will make this an unreachable Node
+		//      2) The parent has yet to arrive
+		//			- When the parent arrives, it will append all the pending children in ParentHashMap
+		if parentIndex, ok := BlockHashMap[newBlock.PrevHash]; ok {
+			parentBlockNode := &BlockNodeArray[parentIndex]
+			parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		} else {
+			if existingChildren, ok := ParentHashMap[newBlock.PrevHash]; ok {
+				ParentHashMap[newBlock.PrevHash] = append(existingChildren, childIndex)
+			} else {
+				ParentHashMap[newBlock.PrevHash] = []int{childIndex}
+			}
+		}
 		//fmt.Println("parent's node with new child:", parentBlockNode)
 		return nil
 	}
@@ -282,6 +400,56 @@ func VerifyBlock(block blockchain.Block) bool {
 	}
 }
 
+// Returns an array of Blocks that are on the longest path and its length
+func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) ([]blockchain.Block, int) {
+	blockChain := make([]blockchain.Block, 0)
+
+	initBIndex := blockHashMap[initBlockHash]
+	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
+
+	if len(blockNodeArray[initBIndex].Children) == 0 {
+		return blockChain, 1
+	}
+
+	var longestPath []blockchain.Block
+	maxLen := -1
+
+	for _, childIndex := range blockNodeArray[initBIndex].Children {
+		child := blockNodeArray[childIndex]
+
+		childHash := GetBlockHash(child.Block)
+		childPath, childLen := GetLongestPath(childHash, blockHashMap, blockNodeArray)
+		longestPathBlockHash := ""
+
+		// If the childLen is equal to the max length, we use their hashes to determine which path to build off of
+		// If childLen > maxLen, we simply update the longestPath
+		if (maxLen == childLen && strings.Compare(childHash, longestPathBlockHash) > 0) || maxLen < childLen {
+			longestPath = childPath
+			maxLen = childLen
+			longestPathBlockHash = childHash
+		}
+	}
+
+	blockChain = append(blockChain, longestPath...)
+	return blockChain, maxLen + 1
+}
+
+// Calculates how much ink a particular miner public key has
+func CalculateInk(minerKey string) int {
+	blockchain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	var inkAmt uint32
+	for _, block := range blockchain {
+		if block.MinerPubKey == minerKey {
+			if len(block.OpHistory) == 0 {
+				inkAmt += MinerInstance.Settings.InkPerNoOpBlock
+			} else {
+				inkAmt += MinerInstance.Settings.InkPerOpBlock
+			}
+		}
+	}
+	return int(inkAmt)
+}
+
 /*******************************
 | Server Management functions
 ********************************/
@@ -304,10 +472,8 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 	}
 }
 
-func (msi *MinerServerInterface) GetPeers() {
-	var addrSet []net.Addr
+func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 	var empty Empty
-	msi.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
 	for _, addr := range addrSet {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
@@ -328,7 +494,7 @@ func (msi *MinerServerInterface) GetPeers() {
 
 			client := rpc.NewClient(conn)
 
-			args := ConnectArgs{conn.LocalAddr().String()}
+			args := ConnectArgs{MinerInstance.Addr}
 			err = client.Call("Peer.Connect", args, &empty)
 			if CheckError(err, "GetPeers:Connect") {
 				continue
@@ -349,7 +515,8 @@ func (msi *MinerServerInterface) GetPeers() {
 // 4. Request new nodes from server and connect to them when peers drop too low
 // 5. When a operation or block is sent through the channel, heartbeat will be replaced by Propagate<Type>
 // This is the central point of control for the peer connectivity
-func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs) {
+
+func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs, peerconn chan net.Addr) {
 	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
@@ -358,6 +525,10 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs)
 		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerHeartBeats()
+		case addr := <-peerconn:
+			// Connection request from peerRpc
+			addrSet := []net.Addr{addr}
+			MinerInstance.MSI.GetPeers(addrSet)
 		case op := <-pop:
 			MinerInstance.MSI.ServerHeartBeat()
 			PeerPropagateOp(op)
@@ -367,7 +538,9 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs)
 		default:
 			CheckLiveliness()
 			if len(PeerList) < int(MinerInstance.Settings.MinNumMinerConnections) {
-				MinerInstance.MSI.GetPeers()
+				var addrSet []net.Addr
+				MinerInstance.MSI.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
+				MinerInstance.MSI.GetPeers(addrSet)
 			}
 		}
 	}
@@ -389,7 +562,7 @@ func PeerHeartBeats() {
 func PeerPropagateOp(op PropagateOpArgs) {
 	for addr, peer := range PeerList {
 		empty := new(Empty)
-		args := PropagateOpArgs{op.Op, op.TTL}
+		args := PropagateOpArgs{op.OpInfo, op.TTL}
 		err := peer.Client.Call("Peer.PropagateOp", args, &empty)
 		if !CheckError(err, "PeerPropagateOp:"+addr) {
 			peer.LastHeartBeat = time.Now()
@@ -431,7 +604,11 @@ func CheckLiveliness() {
 // 3. Receive job updates via the given channels
 // 4. TODO: Return solution
 
+<<<<<<< HEAD
 func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block, pblock chan PropagateBlockArgs) {
+=======
+func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Block) {
+>>>>>>> 1566a2ffbc206bcce29139c51e6fa908a318574b
 	// Channel for receiving the final block w/ nonce from workers
 	solved := make(chan blockchain.Block)
 
@@ -470,7 +647,7 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block, 
 			solved = make(chan blockchain.Block)
 
 			// Assume this was block was validated
-			// Assume this block has already been inserted 
+			// Assume this block has already been inserted
 			done = NoopJob(GetBlockHash(block), solved)
 
 		case sol := <-solved:
@@ -488,9 +665,9 @@ func ProblemSolver(sop chan blockchain.Operation, sblock chan blockchain.Block, 
 
 			//fmt.Println("inserted solution: ", BlockNodeArray)
 			// Start a job on the longest block in the chain
-			blockchain := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+			blockchain, blockchainLen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 			//fmt.Println("state of the longest blockchain", blockchain)
-			lastblock := blockchain[len(blockchain)-1]
+			lastblock := blockchain[blockchainLen-1]
 			done = NoopJob(GetBlockHash(lastblock), solved)
 
 		default:
@@ -518,8 +695,8 @@ func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 	return done
 }
 
-// Initiate the a job with a predefined op array
-func OpJob(hash string, Ops []blockchain.Operation, solved chan blockchain.Block) chan bool {
+// Initiate a job with a predefined op array
+func OpJob(hash string, Ops []blockchain.OperationInfo, solved chan blockchain.Block) chan bool {
 	CurrJobId++
 	block := blockchain.Block{PrevHash: hash,
 		OpHistory:   Ops,
@@ -583,42 +760,52 @@ func pubKeyToString(key ecdsa.PublicKey) string {
 	return string(elliptic.Marshal(key.Curve, key.X, key.Y))
 }
 
-// Returns an array of Blocks that are on the longest path
-func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) []blockchain.Block {
-	blockChain := make([]blockchain.Block, 0)
-
-	initBIndex := blockHashMap[initBlockHash]
-	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
-
-	if len(blockNodeArray[initBIndex].Children) == 0 {
-		return blockChain
-	}
-
-	var longestPath []blockchain.Block
-	maxLen := -1
-
-	for _, childIndex := range blockNodeArray[initBIndex].Children {
-		child := blockNodeArray[childIndex]
-
-		childHash := GetBlockHash(child.Block)
-		childPath := GetLongestPath(childHash, blockHashMap, blockNodeArray)
-		if maxLen < len(childPath) {
-			maxLen = len(childPath)
-			longestPath = childPath
-		}
-	}
-
-	blockChain = append(blockChain, longestPath...)
-	return blockChain
-
-}
-
 func GetBlockHash(block blockchain.Block) string {
 	h := md5.New()
 	bytes, _ := json.Marshal(block)
 	h.Write(bytes)
 	hash := hex.EncodeToString(h.Sum(nil))
 	return hash
+}
+
+// Checks if there are overlaps and enough ink
+func ValidateOperation(op blockchain.Operation, pubKey string) error {
+	shape, err := MinerInstance.getShapeFromOp(op)
+	if err != nil {
+		return err
+	}
+
+	subarr, inkRequired := shape.SubArrayAndCost()
+
+	validateLock.Lock()
+	defer validateLock.Unlock()
+
+	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Checks if this operation has already been incorporated in the longest path of the blockchain
+// If it is in the blockchain, return the block where the operation is in
+func GetBlockHashOfShapeHash(opSig string) string {
+	blockchain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+
+	for _, block := range blockchain {
+		for _, op := range block.OpHistory {
+			if op.OpSig == opSig {
+				blockByteData, _ := json.Marshal(block)
+				hashedBlock := utils.ComputeHash(blockByteData)
+				return hex.EncodeToString(hashedBlock)
+			}
+		}
+	}
+
+	return ""
 }
 
 /*******************************
@@ -639,24 +826,35 @@ func main() {
 	MinerInstance.Addr = addr
 
 	// 2. Create communication channels between goroutines
+<<<<<<< HEAD
 	pop := make(chan PropagateOpArgs, 1)
 	pblock := make(chan PropagateBlockArgs, 1)
 	sop := make(chan blockchain.Operation, 1)
 	sblock := make(chan blockchain.Block, 1)
+=======
+	pop := make(chan PropagateOpArgs, 8)
+	pblock := make(chan PropagateBlockArgs, 8)
+	sop := make(chan blockchain.OperationInfo, 8)
+	sblock := make(chan blockchain.Block, 8)
+	peerconn := make(chan net.Addr, 1)
+>>>>>>> 1566a2ffbc206bcce29139c51e6fa908a318574b
 
 	// 3. Setup Miner-Miner Listener
-	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock)
+	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock, peerconn)
 
 	// Connect to Server
 	MinerInstance.ConnectToServer(serverIP)
 	MinerInstance.MSI.Register(addr)
 
-	//Initialize the hash map and the block node array with the genesis block
+	// Initialize the hash map and the block node array with the genesis block
 	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
 	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
 
+	// Setup Mutex for operations
+	OpMutex = &sync.Mutex{}
+
 	// 4. Setup Miner Heartbeat Manager
-	go ManageConnections(pop, pblock)
+	go ManageConnections(pop, pblock, peerconn)
 
 	// 5. Setup Problem Solving
 	go ProblemSolver(sop, sblock, pblock)
