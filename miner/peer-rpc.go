@@ -79,7 +79,7 @@ func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
-func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
+func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
 	fmt.Println("Hb called")
 	return nil
 }
