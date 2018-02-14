@@ -34,5 +34,5 @@ type Block struct {
 
 type BlockNode struct {
 	Block    Block
-	Children []int
+	Children []int // The indices of the children in the BlockNodeArray
 }

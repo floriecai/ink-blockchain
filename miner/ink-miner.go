@@ -46,6 +46,9 @@ const (
 	MAX_THREADS = 4
 )
 
+// Global blockchain Parent->Children Map
+var ParentHashMap map[string][]int = make(map[string][]int)
+
 // Global block chain array
 var BlockNodeArray []blockchain.BlockNode
 
@@ -336,7 +339,10 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 func InsertBlock(newBlock blockchain.Block) (err error) {
 	if VerifyBlock(newBlock) {
 		// Create a new node for newBlock and append it to BlockNodeArray
-		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
+		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: ParentHashMap[GetBlockHash(newBlock)]}
+
+		// TODO - Do we need a lock here? Can we guarantee that the childIndex below
+		// is the last one
 		BlockNodeArray = append(BlockNodeArray, newBlockNode)
 
 		// Create an entry for newBlock in BlockHashMap
@@ -344,10 +350,24 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 		childHash := GetBlockHash(newBlock)
 
 		BlockHashMap[childHash] = childIndex
+
 		// Update the entry for newBlock's parent in BlockNodeArray
-		parentIndex := BlockHashMap[newBlock.PrevHash]
-		parentBlockNode := &BlockNodeArray[parentIndex]
-		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		// If the parent exists in the blockchain, simply append this new block as a child of the parent
+		// If the parent does not exist either because:
+		// 		1) It is an invalid block
+		//			- Adding this to the BlockNodeArray will make this an unreachable Node
+		//      2) The parent has yet to arrive
+		//			- When the parent arrives, it will append all the pending children in ParentHashMap
+		if parentIndex, ok := BlockHashMap[newBlock.PrevHash]; ok {
+			parentBlockNode := &BlockNodeArray[parentIndex]
+			parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		} else {
+			if existingChildren, ok := ParentHashMap[newBlock.PrevHash]; ok {
+				ParentHashMap[newBlock.PrevHash] = append(existingChildren, childIndex)
+			} else {
+				ParentHashMap[newBlock.PrevHash] = []int{childIndex}
+			}
+		}
 		//fmt.Println("parent's node with new child:", parentBlockNode)
 		return nil
 	}
