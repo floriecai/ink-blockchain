@@ -45,14 +45,6 @@ func ValidateOperation(op blockchain.Operation, pubKey string) error {
 	return nil
 }
 
-	/*******************
-	TODO: Delay evaluation of pixel array
-		  until the entire block chain is built
-		  to account for deletes
-	
-	TODO: CalculateInk(pubkey) can calculate how much ink a public key has
-	*******************/
-
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
 	pubkey string, blocks []blockchain.Block, svgString string) error {
@@ -60,11 +52,8 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 		fmt.Println("checkInkAndConflicts called")
 	}
 
-	// Pixel array for checking shape conflicts
-	pixelarr := shapelib.NewPixelArray(int(m.Settings.CanvasSettings.CanvasXMax),
-		int(m.Settings.CanvasSettings.CanvasYMax))
-
 	pubkeyInk := uint32(0)
+	shapesExisting := make(map[string]*blockchain.OperationInfo)
 
 	// Iterate over all blocks in this structure to form the pixel array
 	// formed by all shapes not from this pubkey, and the ink remaining
@@ -84,17 +73,16 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 		for j := 0; j < numOps; j++ {
 			opInfo := block.OpHistory[j]
 			op := opInfo.Op
-			path, err := m.getShapeFromOp(op)
-			if err != nil {
-				fmt.Println("CRITICAL ERROR, BAD OP IN BLOCKCHAIN")
-				continue
-			}
 
-			subarr, cost := path.SubArrayAndCost()
+			if opInfo.PubKey == pubkey {
+				shape, err := m.getShapeFromOp(op)
+				if err != nil {
+					fmt.Println("CRITICAL ERROR: BAD SHAPE IN BLOCKCHAIN")
+					continue
+				}
 
-			if opInfo.PubKey != pubkey {
-				pixelarr.MergeSubArray(subarr)
-			} else {
+				_, cost := shape.SubArrayAndCost()
+
 				// Don't fill in the pixels for the same pubkey,
 				// but compute the ink required in order to
 				// check if pubkey has sufficient ink.
@@ -105,17 +93,33 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 				} else {
 					pubkeyInk += uint32(cost)
 				}
+			} else {
+				if op.OpType == blockchain.ADD {
+					shapesExisting[opInfo.OpSig] = &opInfo
+				} else {
+					delete(shapesExisting, opInfo.OpSig)
+				}
 			}
 		}
 	}
 
-	// TODO: check ink of the public key for any operations currently in
-	// progress; a pubkey may have more than one op in progress of being
-	// put into the blockchain at a given time.
-
 	if inkRequired > int(pubkeyInk) {
 		fmt.Println("checkInkAndConflicts: insufficient ink")
 		return libminer.InsufficientInkError(uint32(inkRequired))
+	}
+
+	pixelarr := shapelib.NewPixelArray(int(m.Settings.CanvasSettings.CanvasXMax),
+		int(m.Settings.CanvasSettings.CanvasYMax))
+
+	// Merge all shapes existing into the pixel array for validating conflicts
+	for _, v := range shapesExisting {
+		shape, err := m.getShapeFromOp(v.Op)
+		if err != nil {
+			fmt.Println("CRITICAL ERROR: BAD SHAPE IN BLOCKCHAIN")
+		}
+
+		subarr, _ := shape.SubArrayAndCost()
+		pixelarr.MergeSubArray(subarr)
 	}
 
 	if pixelarr.HasConflict(subarr) {

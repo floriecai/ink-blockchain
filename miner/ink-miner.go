@@ -479,14 +479,32 @@ func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNode
 
 // Calculates how much ink a particular miner public key has
 func CalculateInk(minerKey string) int {
-	blockchain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	blockChain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 	var inkAmt uint32
-	for _, block := range blockchain {
+	for _, block := range blockChain {
 		if block.MinerPubKey == minerKey {
 			if len(block.OpHistory) == 0 {
 				inkAmt += MinerInstance.Settings.InkPerNoOpBlock
 			} else {
 				inkAmt += MinerInstance.Settings.InkPerOpBlock
+			}
+		}
+
+		for _, opInfo := range block.OpHistory {
+			op := opInfo.Op
+			if opInfo.PubKey == minerKey {
+				shape, err := MinerInstance.getShapeFromOp(op)
+				if err != nil {
+					fmt.Println("CRITICAL ERROR: BAD SHAPE IN BLOCKCHAIN")
+					continue
+				}
+
+				_, cost := shape.SubArrayAndCost()
+				if op.OpType == blockchain.ADD {
+					inkAmt -= uint32(cost)
+				} else {
+					inkAmt += uint32(cost)
+				}
 			}
 		}
 	}
