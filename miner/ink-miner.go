@@ -46,6 +46,9 @@ const (
 	MAX_THREADS = 4
 )
 
+// Global blockchain Parent->Children Map
+var ParentHashMap map[string][]int = make(map[string][]int)
+
 // Global block chain array
 var BlockNodeArray []blockchain.BlockNode
 
@@ -379,7 +382,10 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 func InsertBlock(newBlock blockchain.Block) (err error) {
 	if VerifyBlock(newBlock) {
 		// Create a new node for newBlock and append it to BlockNodeArray
-		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: []int{}}
+		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: ParentHashMap[GetBlockHash(newBlock)]}
+
+		// TODO - Do we need a lock here? Can we guarantee that the childIndex below
+		// is the last one
 		BlockNodeArray = append(BlockNodeArray, newBlockNode)
 
 		// Create an entry for newBlock in BlockHashMap
@@ -387,10 +393,24 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 		childHash := GetBlockHash(newBlock)
 
 		BlockHashMap[childHash] = childIndex
+
 		// Update the entry for newBlock's parent in BlockNodeArray
-		parentIndex := BlockHashMap[newBlock.PrevHash]
-		parentBlockNode := &BlockNodeArray[parentIndex]
-		parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		// If the parent exists in the blockchain, simply append this new block as a child of the parent
+		// If the parent does not exist either because:
+		// 		1) It is an invalid block
+		//			- Adding this to the BlockNodeArray will make this an unreachable Node
+		//      2) The parent has yet to arrive
+		//			- When the parent arrives, it will append all the pending children in ParentHashMap
+		if parentIndex, ok := BlockHashMap[newBlock.PrevHash]; ok {
+			parentBlockNode := &BlockNodeArray[parentIndex]
+			parentBlockNode.Children = append(parentBlockNode.Children, childIndex)
+		} else {
+			if existingChildren, ok := ParentHashMap[newBlock.PrevHash]; ok {
+				ParentHashMap[newBlock.PrevHash] = append(existingChildren, childIndex)
+			} else {
+				ParentHashMap[newBlock.PrevHash] = []int{childIndex}
+			}
+		}
 		//fmt.Println("parent's node with new child:", parentBlockNode)
 		return nil
 	}
@@ -496,7 +516,7 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 }
 
 func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
-	var empty Empty
+	var blockchainResp []blockchain.Block
 	for _, addr := range addrSet {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
@@ -518,7 +538,7 @@ func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 			client := rpc.NewClient(conn)
 
 			args := ConnectArgs{MinerInstance.Addr}
-			err = client.Call("Peer.Connect", args, &empty)
+			err = client.Call("Peer.Connect", args, &blockchainResp)
 			if CheckError(err, "GetPeers:Connect") {
 				continue
 			}
@@ -627,7 +647,7 @@ func CheckLiveliness() {
 // 3. Receive job updates via the given channels
 // 4. TODO: Return solution
 
-func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Block) {
+func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Block, pblock chan PropagateBlockArgs) {
 	// Channel for receiving the final block w/ nonce from workers
 	solved := make(chan blockchain.Block)
 
@@ -670,7 +690,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			done = NoopJob(GetBlockHash(block), solved)
 
 		case sol := <-solved:
-			fmt.Println("got a solution: ", sol)
+			fmt.Println("got a solution", sol.Nonce)
 
 			// Kill current job
 			close(done)
@@ -679,8 +699,9 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			solved = make(chan blockchain.Block)
 
 			// Insert block into our data structure
-			// TODO: Do we insert it here or upstream via a channel?
 			InsertBlock(sol)
+			pblock <- PropagateBlockArgs{sol, TTL}
+
 			//fmt.Println("inserted solution: ", BlockNodeArray)
 			// Start a job on the longest block in the chain
 			blockchain, blockchainLen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
@@ -786,28 +807,6 @@ func GetBlockHash(block blockchain.Block) string {
 	return hash
 }
 
-// Checks if there are overlaps and enough ink
-func ValidateOperation(op blockchain.Operation, pubKey string) error {
-	shape, err := MinerInstance.getShapeFromOp(op)
-	if err != nil {
-		return err
-	}
-
-	subarr, inkRequired := shape.SubArrayAndCost()
-
-	validateLock.Lock()
-	defer validateLock.Unlock()
-
-	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Checks if this operation has already been incorporated in the longest path of the blockchain
 // If it is in the blockchain, return the block where the operation is in
 func GetBlockHashOfShapeHash(opSig string) string {
@@ -844,10 +843,10 @@ func main() {
 	MinerInstance.Addr = addr
 
 	// 2. Create communication channels between goroutines
-	pop := make(chan PropagateOpArgs, 8)
-	pblock := make(chan PropagateBlockArgs, 8)
-	sop := make(chan blockchain.OperationInfo, 8)
-	sblock := make(chan blockchain.Block, 8)
+	pop := make(chan PropagateOpArgs, 1)
+	pblock := make(chan PropagateBlockArgs, 1)
+	sop := make(chan blockchain.OperationInfo, 1)
+	sblock := make(chan blockchain.Block, 1)
 	peerconn := make(chan net.Addr, 1)
 
 	// 3. Setup Miner-Miner Listener
@@ -868,7 +867,7 @@ func main() {
 	go ManageConnections(pop, pblock, peerconn)
 
 	// 5. Setup Problem Solving
-	go ProblemSolver(sop, sblock)
+	go ProblemSolver(sop, sblock, pblock)
 
 	// 6. Setup Client-Miner Listener (this thread)
 	OpenLibMinerConn(":0")
