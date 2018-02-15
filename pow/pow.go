@@ -20,11 +20,11 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 	h := md5.New()
 	N := int(powDiff)
 	nonce := start
-	fmt.Println("starting operation with start point: ", start)
+	//fmt.Println("starting operation with start point: ", start)
 	for {
 		select {
 		case <-done:
-			fmt.Println("job done, stopping")
+			//fmt.Println("job done, stopping")
 			return
 		default:
 			block.Nonce = nonce
@@ -46,7 +46,7 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 func Recover() {
     // recover from panic caused by writing to a closed channel
     if r := recover(); r != nil {
-    	fmt.Println("recovered from closed channel")
+		fmt.Println("recovered from closed channel")
         return
     }
 }
