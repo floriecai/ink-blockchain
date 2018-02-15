@@ -1,13 +1,18 @@
 package utils
 
 import (
+	"crypto/ecdsa"
 	"crypto/md5"
+	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
 	"strconv"
 	"strings"
 
+	"../blockchain"
+	"../libminer"
 	"../shapelib"
 )
 
@@ -67,27 +72,36 @@ func (c ZCommand) IsRelative() bool { return false }
 
 type SVGPath []SVGCommand
 
-// Contains the offending svg string.
-type InvalidShapeSvgStringError string
-
-func (e InvalidShapeSvgStringError) Error() string {
-	return fmt.Sprintf("BlockArt: Bad shape svg string [%s]", string(e))
+// Given a blockchain.OperationInfo, returns the corresponding html svg element
+// i.e. <svg d="M 0 0 H 10 10 v 20 Z" fill="transparent" stroke="red">
+func GetHTMLSVGString(op blockchain.Operation) string {
+	var fill, stroke string
+	if op.OpType == blockchain.DELETE {
+		fill = "white"
+		stroke = "white"
+	} else {
+		fill = op.Fill
+		stroke = op.Stroke
+	}
+	return fmt.Sprintf("<svg d=\"%s\" fill=\"%s\" stroke=\"%s\">", op.SVGString, fill, stroke)
 }
 
 // Parses a string into a list of SVGCommands
-// Returns a list of SVGPath. Each is a subpath, that begins with the M command
 // Returns an ordered list of SVGCommands that denote an SVGPath
-// Possible Errors: InvalidShapeSvgStringError
-func GetParsedSVG(svgString string) (svgPath []SVGPath, err error) {
+// Possible Errors:
+// - InvalidShapeSvgStringError
+// - ShapeSvgStringTooLongError
+func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 	if len(svgString) > MAX_SVG_LEN {
-		return svgPath, InvalidShapeSvgStringError(svgString)
+		return svgPath, libminer.ShapeSvgStringTooLongError(svgString)
 	}
 
-	// strings.Replace(svgString, ",")
 	tokens := strings.Split(svgString, " ")
 	tokenLen := len(tokens)
-	i, j := 0, 0
-	prevCommand, upperPrevCommand := "", ""
+
+	i := 0
+
+	svgPath = make(SVGPath, 0)
 	for i < tokenLen {
 		var svgCommand SVGCommand
 		tokenUpper := strings.ToUpper(tokens[i])
@@ -95,39 +109,38 @@ func GetParsedSVG(svgString string) (svgPath []SVGPath, err error) {
 
 		// Must start with M command
 		if i == 0 && tokenUpper != "M" {
-			return svgPath, InvalidShapeSvgStringError(svgString)
+			return svgPath, libminer.InvalidShapeSvgStringError(svgString)
 		}
 
 		var param1, param2 int
-		prevCommand, upperPrevCommand = token, tokenUpper
 		if tokenUpper == "L" || tokenUpper == "M" {
 			if i+2 < tokenLen {
 				param1, err = strconv.Atoi(tokens[i+1])
 				if err != nil {
-					return svgPath, InvalidShapeSvgStringError(svgString)
+					return svgPath, libminer.InvalidShapeSvgStringError(svgString)
 				}
 				param2, err = strconv.Atoi(tokens[i+2])
 				if err != nil {
-					return svgPath, InvalidShapeSvgStringError(svgString)
+					return svgPath, libminer.InvalidShapeSvgStringError(svgString)
 				}
 			}
 
 			if tokenUpper == "L" {
-				svgCommand = LCommand{X: param1, IsAbsolute: token != "l"}
+				svgCommand = LCommand{X: param1, Y: param2, IsAbsolute: token != "l"}
+				svgPath = append(svgPath, svgCommand)
 			} else {
 				// M commands are always absolute for our purposes because we can't
 				// know the cursor position to get relative coordinates for m
 				svgCommand = MCommand{X: param1, Y: param2, IsAbsolute: false}
-				svgPath[j] = append(svgPath[j], svgCommand)
-				prevCommand, upperPrevCommand = "", ""
-				j++
+				svgPath = append(svgPath, svgCommand)
 			}
+
 			i += 3
 		} else if tokenUpper == "V" || tokenUpper == "H" {
 			if i+1 < tokenLen {
 				param1, err = strconv.Atoi(tokens[i+1])
 				if err != nil {
-					return svgPath, InvalidShapeSvgStringError(svgString)
+					return svgPath, libminer.InvalidShapeSvgStringError(svgString)
 				}
 			}
 
@@ -136,75 +149,11 @@ func GetParsedSVG(svgString string) (svgPath []SVGPath, err error) {
 			} else {
 				svgCommand = HCommand{Y: param1, IsAbsolute: token != "h"}
 			}
-			svgPath[j] = append(svgPath[j], svgCommand)
+			svgPath = append(svgPath, svgCommand)
 			i += 2
 		} else if tokenUpper == "Z" {
-			svgPath[j] = append(svgPath[j], ZCommand{})
+			svgPath = append(svgPath, ZCommand{})
 			i++
-		} else if _, err := strconv.Atoi(token); err == nil { // Could be a digit
-			switch upperPrevCommand {
-			case "L":
-				// Commands (L, M) take in PAIRS of parameters, so we need i+1
-				for i+1 < tokenLen && !isCommand(strings.ToUpper(tokens[i])) {
-					param1, paramErr1 := strconv.Atoi(tokens[i])
-					param2, paramErr2 := strconv.Atoi(tokens[i+1])
-
-					if paramErr1 == nil && paramErr2 == nil {
-						svgPath[j] = append(svgPath[j], LCommand{X: param1, Y: param2, IsAbsolute: prevCommand == "L"})
-						i++
-					} else {
-						return svgPath, InvalidShapeSvgStringError(svgString)
-					}
-				}
-
-				// There were an uneven number of parameters so no pair could be made
-				if !isCommand(strings.ToUpper(tokens[i])) {
-					return svgPath, InvalidShapeSvgStringError(svgString)
-				}
-			case "M":
-				for i+1 < tokenLen && !isCommand(strings.ToUpper(tokens[i])) {
-					param1, paramErr1 := strconv.Atoi(tokens[i])
-					param2, paramErr2 := strconv.Atoi(tokens[i+1])
-
-					if paramErr1 == nil && paramErr2 == nil {
-						svgPath[j] = append(svgPath[j], MCommand{X: param1, Y: param2, IsAbsolute: false})
-						j++
-						i++
-					} else {
-						return svgPath, InvalidShapeSvgStringError(svgString)
-					}
-				}
-
-				// There were an uneven number of parameters so no pair could be made
-				if !isCommand(strings.ToUpper(tokens[i])) {
-					return svgPath, InvalidShapeSvgStringError(svgString)
-				}
-
-				// TODO fcai - need to account for odd numbers
-			case "H":
-				for i < tokenLen && !isCommand(strings.ToUpper(tokens[i])) {
-					if param1, err = strconv.Atoi(tokens[i]); err == nil {
-						svgPath[j] = append(svgPath[j], HCommand{Y: param1, IsAbsolute: prevCommand == "H"})
-						i++
-					} else {
-						log.Println("Unnamed parameter was not a number")
-						return svgPath, InvalidShapeSvgStringError(svgString)
-					}
-				}
-			case "V":
-				for i < tokenLen && !isCommand(strings.ToUpper(tokens[i])) {
-					if param1, err = strconv.Atoi(tokens[i]); err == nil {
-						svgPath[j] = append(svgPath[j], VCommand{X: param1, IsAbsolute: prevCommand == "V"})
-						i++
-					} else {
-						log.Println("Unnamed parameter was not a number")
-						return svgPath, InvalidShapeSvgStringError(svgString)
-					}
-				}
-			case "Z":
-				log.Println("Z should have no parameters")
-				return svgPath, InvalidShapeSvgStringError(svgString)
-			}
 		} else {
 			log.Println("Command does not exist")
 			return svgPath, err
@@ -214,88 +163,98 @@ func GetParsedSVG(svgString string) (svgPath []SVGPath, err error) {
 	return svgPath, nil
 }
 
-func isCommand(c string) bool {
-	return c == "L" || c == "M" || c == "Z" || c == "H" || c == "V"
-}
+// Returns a list of of Points
+// Possible Errors:
+// - OutOfBoundsError
+// - InvalidShapeSvgStringError
+func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool) (path shapelib.Path, err error) {
+	fmt.Println("svgPaths")
 
-// func isDigit(c string) bool {
-// 	param1, err = strconv.Atoi(c)
-// 	return err != nil
-// }
-
-// Takes a list of SVGPaths (Each path starts with the M command, could be a list of lines)
-// Returns a list of Paths, each path has a list of points
-func SVGToPoints(svgPaths []SVGPath, canvasX int, canvasY int, filled bool) (paths []shapelib.Path) {
 	maxX := -1
 	maxY := -1
 	minX := canvasX + 1
 	minY := canvasY + 1
 
-	// var paths []shapelib.Path
-	paths = make([]shapelib.Path, len(svgPaths))
-	for j, svgPath := range svgPaths {
-		var points []shapelib.Point
-		// Path consists of reference
-		for i, command := range svgPath {
-			var point shapelib.Point
-			switch command.(type) {
-			case MCommand:
-				point.Moved = true
-			default:
-				point.Moved = false
-			}
-
-			// Commands other than M can be relative
-			if command.IsRelative() {
-				switch command.(type) {
-				case LCommand:
-					point.X = points[i-1].X + command.GetX()
-					point.Y = points[i-1].Y + command.GetY()
-				case VCommand:
-					point.X = points[i-1].X + command.GetX()
-					point.Y = points[i-1].Y
-				case HCommand:
-					point.X = points[i-1].X
-					point.Y = points[i-1].Y + command.GetY()
-				default:
-					fmt.Println("Error in svgToPoints: Command isn't relative")
-				}
-			} else {
-				switch command.(type) {
-				case ZCommand:
-					point.X = points[0].X
-					point.Y = points[0].Y
-				default:
-					point.X = command.GetX()
-					point.Y = command.GetY()
-				}
-			}
-
-			minX = int(math.Min(float64(minX), float64(point.X)))
-			minY = int(math.Min(float64(minY), float64(point.Y)))
-
-			maxX = int(math.Max(float64(minX), float64(point.X)))
-			maxY = int(math.Max(float64(minY), float64(point.Y)))
-
-			points[i] = point
+	points := make([]shapelib.Point, 0)
+	// Path consists of reference
+	for i, command := range svgPath {
+		var point shapelib.Point
+		switch command.(type) {
+		case MCommand:
+			point.Moved = true
+		default:
+			point.Moved = false
 		}
 
-		path := shapelib.Path{
-			XMax:   maxX,
-			YMax:   maxY,
-			XMin:   minX,
-			YMin:   minY,
-			Points: points,
-			Filled: filled}
+		// Commands other than M can be relative
+		if command.IsRelative() {
+			switch command.(type) {
+			case LCommand:
+				point.X = points[i-1].X + command.GetX()
+				point.Y = points[i-1].Y + command.GetY()
+			case VCommand:
+				point.X = points[i-1].X + command.GetX()
+				point.Y = points[i-1].Y
+			case HCommand:
+				point.X = points[i-1].X
+				point.Y = points[i-1].Y + command.GetY()
+			default:
+				fmt.Println("Error in svgToPoints: Command isn't relative")
+			}
+		} else {
+			switch command.(type) {
+			case ZCommand:
+				point.X = points[0].X
+				point.Y = points[0].Y
+			default:
+				point.X = command.GetX()
+				point.Y = command.GetY()
+			}
+		}
+		if point.X > canvasX || point.Y > canvasY {
+			return path, libminer.OutOfBoundsError{}
+		}
 
-		paths[j] = path
+		minX = int(math.Min(float64(minX), float64(point.X)))
+		minY = int(math.Min(float64(minY), float64(point.Y)))
+
+		maxX = int(math.Max(float64(minX), float64(point.X)))
+		maxY = int(math.Max(float64(minY), float64(point.Y)))
+
+		points = append(points, point)
 	}
 
-	return paths
+	// If it is filled, path must represent a single closed shape
+	if filled {
+		lastPoint := points[len(points)-1]
+		firstPoint := points[0]
+
+		if firstPoint.X != lastPoint.X || firstPoint.Y != lastPoint.Y {
+			return path, libminer.InvalidShapeSvgStringError("")
+		}
+	}
+
+	path = shapelib.Path{
+		XMax:   maxX,
+		YMax:   maxY,
+		XMin:   minX,
+		YMin:   minY,
+		Points: points,
+		Filled: filled}
+
+	fmt.Printf("\n\n")
+	fmt.Printf("Paths is: %#v", path)
+	fmt.Printf("\n\n")
+	return path, nil
 }
 
 func ComputeHash(data []byte) []byte {
 	h := md5.New()
 	h.Write(data)
 	return h.Sum(nil)
+}
+
+func GetPublicKeyString(pubKey ecdsa.PublicKey) string {
+	publicKeyBytes, _ := x509.MarshalPKIXPublicKey(&pubKey)
+	return hex.EncodeToString(publicKeyBytes)
 }

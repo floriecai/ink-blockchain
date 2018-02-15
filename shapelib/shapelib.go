@@ -24,17 +24,23 @@ Public types and methods:
 
 	PixelSubArray
 	  Print()
-	  GetPixelsFilled() -> int
+	  PixelsFilled() -> int
 
 	Point
 
+	Shape
+	  SubArray()        -> PixelSubArray
+	  SubArrayAndCost() -> int
+
 	Path
-	  GetSubArray() -> PixelSubArray
-	  TotalLength() -> int
+	  SubArray()        -> PixelSubArray
+	  TotalLength()     -> int
+	  SubArrayAndCost() -> int
 
 	Circle
-	  GetSubArray() -> PixelSubArray
-	  Circumference() -> int
+	  SubArray()        -> PixelSubArray
+	  Circumference()   -> int
+	  SubArrayAndCost() -> int
 
 
 This file in particular contains all type definitions and some misc. functions.
@@ -54,9 +60,22 @@ type PixelArray [][]byte
 // SubArray that starts at a relative position rather than (0,0)
 // xStartByte should be on a byte boundary, ie. % 8 == 0.
 type PixelSubArray struct {
-	bytes [][]byte
+	bytes      [][]byte
 	xStartByte int
-	yStart int
+	yStart     int
+}
+
+// Interface for a shape that can return its subarray of pixel filled.
+type Shape interface {
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape.
+	SubArray() PixelSubArray
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape, as well as the cost that
+	// is associated with the shape.
+	SubArrayAndCost() (subarr PixelSubArray, cost int)
 }
 
 // Represents the data of a Path SVG item.
@@ -83,20 +102,21 @@ type Path struct {
 // if the Point (n) has (Moved == true), then there is no line drawn between
 // Point (n-1) to Point(n).
 type Point struct {
-	X int
-	Y int
+	X     int
+	Y     int
 	Moved bool
 }
 
 // Circle. Not much more to say really.
 type Circle struct {
-	C Point
-	R int
+	C      Point
+	R      int
 	Filled bool
 }
 
 // Used for computing shit for the Path object.
 type slopeType int
+
 const (
 	POSRIGHT slopeType = iota
 	NEGRIGHT
@@ -125,7 +145,7 @@ func maxByte(nBits int) int {
 // Get the slope and y-intercept of a line formed by two points
 func getSlopeIntercept(p1 Point, p2 Point) (slope float64, intercept float64) {
 	slope = (float64(p2.Y) - float64(p1.Y)) / (float64(p2.X) - float64(p1.X))
-	intercept = float64(p1.Y) - slope * float64(p1.X)
+	intercept = float64(p1.Y) - slope*float64(p1.X)
 
 	return slope, intercept
 }
@@ -170,7 +190,7 @@ func getLineParams(p1, p2 Point) (sT slopeType, slope, intercept float64) {
 }
 
 // Generates an iterator for a line.  What a mess.
-func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
+func linePointsGen(p1, p2 Point) (gen func() (x, y int), vertDirection int) {
 	// Set up math
 	slopeT, slope, intercept := getLineParams(p1, p2)
 
@@ -203,11 +223,11 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 					return -1, -1
 				}
 
-				yThresh = int(slope * x + intercept + 0.5)
+				yThresh = int(slope*x + intercept + 0.5)
 				xPrev = int(x)
 				x++
 
-				if (y != yThresh) {
+				if y != yThresh {
 					y++
 				}
 
@@ -216,9 +236,9 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 		}, vertDirection
 	case NEGRIGHT:
 		vertDirection = -1
-		yThresh = int(slope * x + intercept + 0.5)
+		yThresh = int(slope*x + intercept + 0.5)
 
-		return func () (int, int) {
+		return func() (int, int) {
 			if y > yThresh {
 				if y < p2.Y {
 					return -1, -1
@@ -231,11 +251,11 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 					return -1, -1
 				}
 
-				yThresh = int(slope * x + intercept + 0.5)
+				yThresh = int(slope*x + intercept + 0.5)
 				xPrev = int(x)
 				x++
 
-				if (y != yThresh) {
+				if y != yThresh {
 					y--
 				}
 
@@ -249,7 +269,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 			vertDirection = -1
 		}
 
-		yThresh = int(slope * x + intercept + 0.5)
+		yThresh = int(slope*x + intercept + 0.5)
 
 		return func() (int, int) {
 			if y > yThresh {
@@ -264,11 +284,11 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 					return -1, -1
 				}
 
-				yThresh = int(slope * x + intercept + 0.5)
+				yThresh = int(slope*x + intercept + 0.5)
 				xPrev = int(x)
 				x--
 
-				if (y != yThresh) {
+				if y != yThresh {
 					y--
 				}
 
@@ -278,7 +298,7 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 	case NEGLEFT:
 		vertDirection = 1
 
-		return func () (int, int) {
+		return func() (int, int) {
 			if y < yThresh {
 				if y > p2.Y {
 					return -1, -1
@@ -291,11 +311,11 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 					return -1, -1
 				}
 
-				yThresh = int(slope * x + intercept + 0.5)
+				yThresh = int(slope*x + intercept + 0.5)
 				xPrev = int(x)
 				x--
 
-				if (y != yThresh) {
+				if y != yThresh {
 					y++
 				}
 
@@ -305,8 +325,8 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 	case INFUP:
 		vertDirection = 1
 
-		return func () (int, int) {
-			if (y > p2.Y) {
+		return func() (int, int) {
+			if y > p2.Y {
 				return -1, -1
 			}
 
@@ -317,8 +337,8 @@ func linePointsGen(p1, p2 Point) (gen func () (x, y int), vertDirection int) {
 	case INFDOWN:
 		vertDirection = -1
 
-		return func () (int, int) {
-			if (y < p2.Y) {
+		return func() (int, int) {
+			if y < p2.Y {
 				return -1, -1
 			}
 
