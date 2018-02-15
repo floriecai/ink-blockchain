@@ -18,7 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	"io/ioutil"
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
@@ -446,7 +446,7 @@ func VerifyBlock(block blockchain.Block) bool {
 // Returns an array of Blocks that are on the longest path and its length
 func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) ([]blockchain.Block, int) {
 	//fmt.Println("running get longest path with block hash: ", initBlockHash)
-
+	defer Recover()
 	blockChain := make([]blockchain.Block, 0)
 
 	initBIndex := blockHashMap[initBlockHash]
@@ -872,6 +872,19 @@ func PrintBlockChain(blocks []blockchain.Block){
 	}
 	fmt.Print("\n")
 }
+
+func Recover() {
+    // recover from panic caused by writing to a closed channel
+    if r := recover(); r != nil {
+		fmt.Println("recovered from GetLongestPath")
+		blockhash, _ := json.Marshal(BlockHashMap)
+		blockarray, _ := json.Marshal(BlockNodeArray)
+		ioutil.WriteFile("./output/blockhashmap.txt", blockhash, 0644)
+		ioutil.WriteFile("./output/blockhasharray.txt", blockarray, 0644)
+        return
+    }
+}
+
 /*******************************
 | Main
 ********************************/
@@ -890,8 +903,8 @@ func main() {
 	MinerInstance.Addr = addr
 
 	// 2. Create communication channels between goroutines
-	pop := make(chan PropagateOpArgs, 1)
-	pblock := make(chan PropagateBlockArgs, 1)
+	pop := make(chan PropagateOpArgs, 10)
+	pblock := make(chan PropagateBlockArgs, 10)
 	sop := make(chan blockchain.OperationInfo, 1)
 	sblock := make(chan blockchain.Block, 1)
 	peerconn := make(chan net.Addr, 1)
