@@ -49,6 +49,7 @@ const (
 
 // Global blockchain Parent->Children Map
 var ParentHashMap map[string][]int = make(map[string][]int)
+var ParentHashMapC sync.Map = sync.Map{}
 
 // Global block chain array
 var BlockNodeArray []blockchain.BlockNode
@@ -57,6 +58,7 @@ var BlockNodeArray []blockchain.BlockNode
 // Key: The hash of a block
 // Val: The index of block with such hash in BlockNodeArray
 var BlockHashMap map[string]int = make(map[string]int)
+var BlockHashMapC sync.Map = sync.Map{}
 
 var BlockChainMutex *sync.Mutex
 
@@ -926,6 +928,9 @@ func main() {
 	BlockHashMap[MinerInstance.Settings.GenesisBlockHash] = 0
 	BlockNodeArray = append(BlockNodeArray, blockchain.BlockNode{})
 
+	BlockHashMapC.Store("temp", 1)
+	BlockHashMapC.Store(1, "blah")
+	// temp := BlockHashMapC.
 	// Setup Mutex for operations
 	OpMutex = &sync.Mutex{}
 	BlockChainMutex = &sync.Mutex{}
