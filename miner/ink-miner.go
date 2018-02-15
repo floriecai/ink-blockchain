@@ -331,6 +331,49 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 	return err
 }
 
+func (lmi *LibMinerInterface) GetBlock(req *libminer.Request, response *libminer.BlocksResponse) (err error) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		var blockRequest libminer.BlockRequest
+		json.Unmarshal(req.Msg, &blockRequest)
+
+		if blockIndex, ok := BlockHashMap[blockRequest.BlockHash]; ok {
+			blockNode := BlockNodeArray[blockIndex]
+			response.Blocks = []blockchain.Block{blockNode.Block}
+			return nil
+		}
+
+		err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
+		return err
+	}
+
+	err = fmt.Errorf("invalid user")
+	return err
+}
+
+func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.OpResponse) (err error) {
+	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
+		var opRequest libminer.OpRequest
+		json.Unmarshal(req.Msg, &opRequest)
+
+		blockHash := GetBlockHashOfShapeHash(opRequest.ShapeHash)
+		if blockHash == "" {
+			return libminer.InvalidShapeHashError(opRequest.ShapeHash)
+		}
+
+		blockIndex := BlockHashMap[blockHash]
+		for _, opInfo := range BlockNodeArray[blockIndex].Block.OpHistory {
+			if opInfo.OpSig == opRequest.ShapeHash {
+				response.Op = opInfo.Op
+			}
+		}
+
+		return libminer.InvalidShapeHashError(opRequest.ShapeHash)
+	}
+
+	err = fmt.Errorf("invalid user")
+	return err
+}
+
 /*******************************
 | Blockchain functions
 ********************************/
@@ -402,6 +445,8 @@ func VerifyBlock(block blockchain.Block) bool {
 
 // Returns an array of Blocks that are on the longest path and its length
 func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) ([]blockchain.Block, int) {
+	fmt.Println("running get longest path with block hash: ", initBlockHash)
+
 	blockChain := make([]blockchain.Block, 0)
 
 	initBIndex := blockHashMap[initBlockHash]
@@ -432,6 +477,22 @@ func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNode
 
 	blockChain = append(blockChain, longestPath...)
 	return blockChain, maxLen + 1
+}
+
+// Returns an array of Blocks that are on the same path as the hash
+func GetPath(targetBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) ([]blockchain.Block, error) {
+	lastIndex := blockHashMap[targetBlockHash]
+	lastBlock := blockNodeArray[lastIndex].Block
+	blockChain := []blockchain.Block{lastBlock}
+	for {
+		if _, ok := blockHashMap[lastBlock.PrevHash]; !ok || lastBlock.PrevHash == MinerInstance.Settings.GenesisBlockHash {
+			return blockChain, nil
+		}
+
+		lastIndex = blockHashMap[lastBlock.PrevHash]
+		lastBlock = blockNodeArray[lastIndex].Block
+		blockChain = append([]blockchain.Block{lastBlock}, blockChain...)
+	}
 }
 
 // Calculates how much ink a particular miner public key has
@@ -473,7 +534,7 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 }
 
 func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
-	var empty Empty
+	var blockchainResp []blockchain.Block
 	for _, addr := range addrSet {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
@@ -495,7 +556,7 @@ func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 			client := rpc.NewClient(conn)
 
 			args := ConnectArgs{MinerInstance.Addr}
-			err = client.Call("Peer.Connect", args, &empty)
+			err = client.Call("Peer.Connect", args, &blockchainResp)
 			if CheckError(err, "GetPeers:Connect") {
 				continue
 			}
@@ -666,6 +727,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			lastblock := blockchain[blockchainLen-1]
 			done = NoopJob(GetBlockHash(lastblock), solved)
 
+			PrintBlockChain(blockchain)
 		default:
 			if CurrJobId == 0 {
 				fmt.Println("Initiating the first job")
@@ -782,6 +844,12 @@ func GetBlockHashOfShapeHash(opSig string) string {
 	return ""
 }
 
+func PrintBlockChain(blocks []blockchain.Block){
+	for _, block := range blocks {
+		fmt.Print("<- ", block.PrevHash, ":",block.Nonce, "->")
+	}
+	fmt.Print("\n")
+}
 /*******************************
 | Main
 ********************************/

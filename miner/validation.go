@@ -19,38 +19,33 @@ const LOG_VALIDATION = true
 
 
 func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) bool {
-	fmt.Println("ValidateBlock::TODO: Unfinished")
-	/*
-	validateLock.Lock()
-	defer validateLock.Unlock()
-
-	blocks, _ := GetLongestPath(m.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	//fmt.Println("ValidateBlock::TODO: Unfinished")
 
 	testblock := new(blockchain.Block)
+	testblock.MinerPubKey = block.MinerPubKey
 	// check that the block hashes correctly
+	// this is checked a lot though, do we need this? TODO
 	if VerifyBlock(block){
-		for opinfo := range block.OpHistory {
-			testchain := append(blocks, testblock)
+		for _, opinfo := range block.OpHistory {
+			testchain := append(chain, *testblock)
+			op := opinfo.Op
 			shape, err := MinerInstance.getShapeFromOp(op)
 			if err != nil {
-				return err
+				return false
 			}
 
 			subarr, inkRequired := shape.SubArrayAndCost()
 
-			blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
-
+			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, block.MinerPubKey, testchain, op.SVGString)
 			if err != nil {
-				return err
+				return false
 			}
 
-			return nil
-
+			testblock.OpHistory = append(testblock.OpHistory, opinfo)
 		}
+		return true
 	}
 
-	*/
 	return false
 }
 

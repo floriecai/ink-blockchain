@@ -71,18 +71,20 @@ type GetBlockChainArgs struct {
 // requesting connect will be added to the maintained peer count. There will
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
-func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
+func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 
 	// - Send through request channel to Connection Manager to connect next time
 	p.reqCh <- args.Addr
+	blockchain, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	*reply = blockchain
 	fmt.Println("Connect called by: ", args.Addr.String())
 
 	return nil
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
-func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
-	//fmt.Println("Hb called")
+func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
+	fmt.Println("Hb called")
 	return nil
 }
 
@@ -128,7 +130,7 @@ var validateLock sync.Mutex
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
+func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	fmt.Println("PropagateOp called")
 
 	// TODO: Validate the shapehash using the public key
@@ -170,37 +172,39 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
+func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
-	// Propagate block to list of connected peers.
-	// Propagate regardless of validity because whats not valid on your chain
-	// may be valid on another miner with a more correct chain
-	args.TTL--
-	if args.TTL > 0 {
-		fmt.Println("Propgation:", args.TTL)
-		p.blkCh <- args
-	}
+	validateLock.Lock()
+	defer validateLock.Unlock()
 
 	// Find the path that the block should be on, no guarantee it is the longest
-	path, err := GetPath(args.Block, BlockHashMap, BlockNodeArray)
+	path, err := GetPath(args.Block.PrevHash, BlockHashMap, BlockNodeArray)
 	if CheckError(err, "PropagateBlock:GetPath"){
 		return nil
 	}
-	if p.miner.ValidateBlock(args.Block, path)) {
+
+	// Validate the block, if the block is not valid just drop it
+	if p.miner.ValidateBlock(args.Block, path) {
+		// Propagate block to list of connected peers.
+		args.TTL--
+		if args.TTL > 0 {
+			fmt.Println("Propgation:", args.TTL)
+			p.blkCh <- args
+		}
 
 		// Snapshot the current longest path
-		longest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-		length := len(longest)
+		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 		lastblock := longest[length-1]
 
 		// - Add block to block chain.
 		InsertBlock(args.Block)
 
 		// Check if the longest path changed
-		newlongest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-		newlength := len(newlongest)
+		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 		newlastblock := newlongest[newlength-1]
+
+		// If the longest path changed we should build off of it so send it to problem solver
 		if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
 			p.blkSCh <- args.Block
 		}
@@ -228,7 +232,7 @@ func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
 	server := rpc.NewServer()
-	server.RegisterName("Peer", pRpc)
+	server.RegisterName("Peer", &pRpc)
 
 	server.Accept(ln)
 }
