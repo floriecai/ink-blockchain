@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"regexp"
 
 	"../blockchain"
 	"../libminer"
@@ -224,13 +225,49 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 		points = append(points, point)
 	}
 
-	// If it is filled, path must represent a single closed shape
-	if filled {
-		lastPoint := points[len(points)-1]
-		firstPoint := points[0]
+	// Check if any other point other than the first has a "move". If so,
+	// the fill check is different.
+	var moved = false
+	for i := 1; i <  len(points); i++ {
+		if points[i].Moved {
+			moved = true
+		}
+	}
 
-		if firstPoint.X != lastPoint.X || firstPoint.Y != lastPoint.Y {
-			return path, libminer.InvalidShapeSvgStringError("")
+	// If it is filled, path must represent closed shapes
+	if filled {
+		if !moved {
+			// Normal first-last point check
+			lastPoint := points[len(points)-1]
+			firstPoint := points[0]
+
+			if firstPoint.X != lastPoint.X || firstPoint.Y != lastPoint.Y {
+				return path, libminer.InvalidShapeSvgStringError("")
+			}
+		} else {
+			// Weird stuff here. Need to check each individual shape
+			// created between "moves".
+			startPoint := points[0]
+			prevPoint := points[0]
+
+			for i := 0; i < len(points); i++ {
+				if points[i].Moved {
+					if startPoint.X != prevPoint.X ||
+						startPoint.Y != prevPoint.Y {
+						return path, libminer.InvalidShapeSvgStringError("")
+					}
+
+					startPoint = points[i]
+				}
+
+				prevPoint = points[i]
+			}
+
+			// Check the last moved section
+			if startPoint.X != prevPoint.X ||
+					startPoint.Y != prevPoint.Y {
+				return path, libminer.InvalidShapeSvgStringError("")
+			}
 		}
 	}
 
@@ -247,6 +284,53 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 	fmt.Printf("Paths is: %#v", path)
 	fmt.Printf("\n\n")
 	return path, nil
+}
+
+// Return a shapelib.Circle struct from a blockchain operation struct.
+// Errors returned:
+//    libminer.InvalidShapeSvgStringError
+//    libminer.OutOfBoundsError
+func GetParsedCirc(op blockchain.Operation, canvasX int, canvasY int) (shapelib.Circle, error) {
+	var circ shapelib.Circle
+
+	if op.Fill == "transparent" && op.Stroke == "transparent" {
+		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
+	}
+
+	re := regexp.MustCompile(`circle x:(\d+) y:(\d+) r:(\d+)`)
+	match := re.FindStringSubmatch(op.SVGString)
+
+	if match == nil {
+		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
+	}
+
+	x, err := strconv.ParseUint(match[1], 10, 64)
+	if err != nil {
+		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
+	}
+
+	y, err := strconv.ParseUint(match[2], 10, 64)
+	if err != nil {
+		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
+	}
+
+	r, err := strconv.ParseUint(match[3], 10, 64)
+	if err != nil {
+		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
+	}
+
+	if x + r > uint64(canvasX) || y + r > uint64(canvasY) {
+		return circ, libminer.OutOfBoundsError{}
+	}
+
+	circ = shapelib.NewCircle(
+		int(x),
+		int(y),
+		int(r),
+		op.Fill != "transparent",
+		op.Stroke != "transparent")
+
+	return circ, nil
 }
 
 func ComputeHash(data []byte) []byte {

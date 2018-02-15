@@ -62,7 +62,7 @@ func main() {
 	//points[3] = shapelib.Point {300, 0, false }
 	//points[4] = shapelib.Point {0, 0, false }
 
-	path1 := shapelib.NewPath(points, true)
+	path1 := shapelib.NewPath(points, true, true)
 	sub1 := path1.SubArray()
 	fmt.Println("Total len path:", path1.TotalLength())
 

@@ -93,21 +93,24 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGString)
 	if err == nil {
 		// Error is nil, should be parsable into shapelib.Path
-		return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
-			int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent",
+		return utils.SVGToPoints(pathlist,
+			int(m.Settings.CanvasSettings.CanvasXMax),
+			int(m.Settings.CanvasSettings.CanvasXMax),
+			op.Fill != "transparent",
 			op.Stroke != "transparent")
 	}
 
-	// TODO: try parsing it as a circle
-	//circ, err := utils.GetParsedCirc(op.SVGOp)
-	//if err != nil {
-	//	fmt.Println("SVG string is neither circle nor path:", op.SVGOp)
-	//	return shapelib.Shape(shapelib.Circle{0, 0, 0, false}), err
-	//}
+	// Try parsing it as a circle
+	circ, err := utils.GetParsedCirc(op,
+		int(m.Settings.CanvasSettings.CanvasXMax),
+		int(m.Settings.CanvasSettings.CanvasXMax))
+	if err != nil {
+		fmt.Println("SVG string is neither circle nor path:", op.SVGString)
+		return circ, err
+	}
 
 	// FIXME: change for circle
-	circ := shapelib.NewCircle(0, 0, 0, false, false)
-	return circ, fmt.Errorf("Not a path or circle")
+	return circ, nil
 }
 
 // Get a shapelib.Path from an operation
