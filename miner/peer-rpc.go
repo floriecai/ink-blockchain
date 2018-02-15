@@ -75,7 +75,12 @@ func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 
 	// - Send through request channel to Connection Manager to connect next time
 	p.reqCh <- args.Addr
-	blockchain, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	blockchain := make([]blockchain.Block, 0)
+	for i, node :=  range BlockNodeArray {
+		if i != 0 {
+			blockchain = append(blockchain, node.Block)
+		}
+	}
 	*reply = blockchain
 	fmt.Println("Connect called by: ", args.Addr.String())
 
@@ -178,7 +183,7 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
 func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
-	fmt.Println("PropagateBlock called")
+	//fmt.Println("PropagateBlock called")
 
 	validateLock.Lock()
 	defer validateLock.Unlock()
@@ -194,7 +199,7 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 		// Propagate block to list of connected peers.
 		args.TTL--
 		if args.TTL > 0 {
-			fmt.Println("Propgation:", args.TTL)
+			//fmt.Println("Propgation:", args.TTL)
 			p.blkCh <- args
 		}
 

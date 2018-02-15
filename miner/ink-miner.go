@@ -41,7 +41,7 @@ var PeerList map[string]*Peer = make(map[string]*Peer)
 
 const (
 	// Global TTL of propagate requests
-	TTL = 10
+	TTL = 2
 	// Maximum threads we will use for problem solving
 	MAX_THREADS = 4
 )
@@ -578,7 +578,10 @@ func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 			if CheckError(err, "GetPeers:Connect") {
 				continue
 			}
-
+			for _, block := range blockchainResp {
+				fmt.Println("inserting:< ", block.PrevHash, ":", block.Nonce)
+				InsertBlock(block)
+			}
 			PeerList[addr.String()] = &Peer{client, time.Now()}
 		}
 	}
@@ -712,7 +715,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			// Assume that this block was validated
 			// Assume this is the next block to build off of
 			// Reissue a job with this blockhash as prevBlock
-			fmt.Println("got new block to hash:", block)
+			fmt.Println("got new block to hash")
 
 			// Kill current job
 			close(done)
