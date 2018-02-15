@@ -71,18 +71,20 @@ type GetBlockChainArgs struct {
 // requesting connect will be added to the maintained peer count. There will
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
-func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
+func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 
 	// - Send through request channel to Connection Manager to connect next time
 	p.reqCh <- args.Addr
+	blockchain, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	*reply = blockchain
 	fmt.Println("Connect called by: ", args.Addr.String())
 
 	return nil
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
-func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
-	//fmt.Println("Hb called")
+func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
+	fmt.Println("Hb called")
 	return nil
 }
 
@@ -128,7 +130,7 @@ var validateLock sync.Mutex
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
+func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	fmt.Println("PropagateOp called")
 
 	// TODO: Validate the shapehash using the public key
@@ -170,7 +172,7 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
+func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
 	// - Validate the block
@@ -187,7 +189,6 @@ func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 	length := len(longest)
 	lastblock := longest[length-1]
-
 
 	// Propagate block to list of connected peers.
 	args.TTL--
@@ -224,7 +225,7 @@ func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
 	server := rpc.NewServer()
-	server.RegisterName("Peer", pRpc)
+	server.RegisterName("Peer", &pRpc)
 
 	server.Accept(ln)
 }

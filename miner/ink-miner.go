@@ -473,7 +473,7 @@ func (msi *MinerServerInterface) ServerHeartBeat() {
 }
 
 func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
-	var empty Empty
+	var blockchainResp []blockchain.Block
 	for _, addr := range addrSet {
 		if _, ok := PeerList[addr.String()]; !ok {
 			fmt.Println("GetPeers::Connecting to address: ", addr.String())
@@ -495,7 +495,7 @@ func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 			client := rpc.NewClient(conn)
 
 			args := ConnectArgs{MinerInstance.Addr}
-			err = client.Call("Peer.Connect", args, &empty)
+			err = client.Call("Peer.Connect", args, &blockchainResp)
 			if CheckError(err, "GetPeers:Connect") {
 				continue
 			}
