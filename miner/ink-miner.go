@@ -41,7 +41,7 @@ var PeerList map[string]*Peer = make(map[string]*Peer)
 
 const (
 	// Global TTL of propagate requests
-	TTL = 100
+	TTL = 10
 	// Maximum threads we will use for problem solving
 	MAX_THREADS = 4
 )
@@ -637,7 +637,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 
 			// Kill current job
 			close(done)
-			close(solved)
+			//close(solved)
 
 			// Make a new channel
 			solved = make(chan blockchain.Block)

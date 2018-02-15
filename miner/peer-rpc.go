@@ -173,33 +173,37 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	fmt.Println("PropagateBlock called")
 
-	// - Validate the block
-
-	validateLock.Lock()
-	defer validateLock.Unlock()
-
-	longest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-
-	p.miner.ValidateBlock(args.Block, longest)
-
-	// - Add block to block chain.
-	InsertBlock(args.Block)
-
-	length := len(longest)
-	lastblock := longest[length-1]
-
-
 	// Propagate block to list of connected peers.
+	// Propagate regardless of validity because whats not valid on your chain
+	// may be valid on another miner with a more correct chain
 	args.TTL--
 	if args.TTL > 0 {
+		fmt.Println("Propgation:", args.TTL)
 		p.blkCh <- args
 	}
 
-	newlongest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
-	newlength := len(newlongest)
-	newlastblock := newlongest[newlength-1]
-	if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
-		p.blkSCh <- args.Block
+	// Find the path that the block should be on, no guarantee it is the longest
+	path, err := GetPath(args.Block, BlockHashMap, BlockNodeArray)
+	if CheckError(err, "PropagateBlock:GetPath"){
+		return nil
+	}
+	if p.miner.ValidateBlock(args.Block, path)) {
+
+		// Snapshot the current longest path
+		longest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		length := len(longest)
+		lastblock := longest[length-1]
+
+		// - Add block to block chain.
+		InsertBlock(args.Block)
+
+		// Check if the longest path changed
+		newlongest, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		newlength := len(newlongest)
+		newlastblock := newlongest[newlength-1]
+		if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
+			p.blkSCh <- args.Block
+		}
 	}
 
 	return nil

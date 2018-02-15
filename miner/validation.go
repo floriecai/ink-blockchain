@@ -18,9 +18,40 @@ import (
 const LOG_VALIDATION = true
 
 
-func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) error {
+func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) bool {
 	fmt.Println("ValidateBlock::TODO: Unfinished")
-	return nil
+	/*
+	validateLock.Lock()
+	defer validateLock.Unlock()
+
+	blocks, _ := GetLongestPath(m.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+
+	testblock := new(blockchain.Block)
+	// check that the block hashes correctly
+	if VerifyBlock(block){
+		for opinfo := range block.OpHistory {
+			testchain := append(blocks, testblock)
+			shape, err := MinerInstance.getShapeFromOp(op)
+			if err != nil {
+				return err
+			}
+
+			subarr, inkRequired := shape.SubArrayAndCost()
+
+			blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
+
+			if err != nil {
+				return err
+			}
+
+			return nil
+
+		}
+	}
+
+	*/
+	return false
 }
 
 // Checks if there are overlaps and enough ink
