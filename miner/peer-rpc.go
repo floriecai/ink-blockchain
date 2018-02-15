@@ -233,7 +233,7 @@ func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 			blockchain = append(blockchain, node.Block)
 		}
 	}
-	*reply = blockchain
+	*reply = GetBlockChainArgs{blockchain}
 
 	return nil
 }

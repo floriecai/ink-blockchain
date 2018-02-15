@@ -21,32 +21,43 @@ const LOG_VALIDATION = true
 func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) bool {
 	//fmt.Println("ValidateBlock::TODO: Unfinished")
 
-	testblock := new(blockchain.Block)
-	testblock.MinerPubKey = block.MinerPubKey
 	// check that the block hashes correctly
 	// this is checked a lot though, do we need this? TODO
 	if VerifyBlock(block){
-		for _, opinfo := range block.OpHistory {
+		validatedops := ValidateOps(block.OpHistory, chain)
+		if len(validatedops) == len(block.OpHistory) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Validates a set of operations against the longest block chain
+func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) ([]blockchain.OperationInfo) {
+		testblock := new(blockchain.Block)
+		testblock.MinerPubKey = ""
+		for _, opinfo := range ops {
 			testchain := append(chain, *testblock)
 			op := opinfo.Op
 			shape, err := MinerInstance.getShapeFromOp(op)
 			if err != nil {
-				return false
+				continue
 			}
 
 			subarr, inkRequired := shape.SubArrayAndCost()
-
-			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, block.MinerPubKey, testchain, op.SVGString)
+			if opinfo.Op.OpType == blockchain.ADD{
+				err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, opinfo.PubKey, testchain, op.SVGString)
+			}	else {
+				err = MinerInstance.checkDeletion(opinfo.OpSig, opinfo.PubKey, testchain)
+			}
 			if err != nil {
-				return false
+				continue
 			}
 
 			testblock.OpHistory = append(testblock.OpHistory, opinfo)
 		}
-		return true
-	}
-
-	return false
+		return testblock.OpHistory
 }
 
 // Checks if there are overlaps and enough ink
