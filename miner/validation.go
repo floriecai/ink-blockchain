@@ -9,6 +9,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"../blockchain"
 	"../libminer"
@@ -58,9 +59,11 @@ func ValidateOperation(op blockchain.Operation, pubKey string) error {
 	subarr, inkRequired := shape.SubArrayAndCost()
 
 	validateLock.Lock()
+	log.Println("Got ValidateLock in vOp")
+	defer log.Println("Release ValidateLock in vOp")
 	defer validateLock.Unlock()
 
-	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
 
 	if err != nil {

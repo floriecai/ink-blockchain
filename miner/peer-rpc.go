@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/rpc"
 
@@ -154,9 +155,11 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	subarr, inkRequired := shape.SubArrayAndCost()
 
 	validateLock.Lock()
+	log.Println("Got ValidateLock in Pop")
+	defer log.Println("Release ValidateLock in Pop")
 	defer validateLock.Unlock()
 
-	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 	if args.OpInfo.Op.OpType == blockchain.ADD {
 		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString)
 	} else {
@@ -204,14 +207,14 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 		}
 
 		// Snapshot the current longest path
-		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 		lastblock := longest[length-1]
 
 		// - Add block to block chain.
 		InsertBlock(args.Block)
 
 		// Check if the longest path changed
-		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 		newlastblock := newlongest[newlength-1]
 
 		// If the longest path changed we should build off of it so send it to problem solver
