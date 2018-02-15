@@ -171,7 +171,6 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	p.opSCh <- args.OpInfo
 
 	// Propagate op to list of connected peers.
-	// TODO: figure out a way to optimize this... don't want to revalidate ops and stuff
 	args.TTL--
 	if args.TTL > 0 {
 		p.opCh <- args
@@ -225,10 +224,16 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
+func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
 
-	// Return a flattened version of the blockchain from somewhere
+	blockchain := make([]blockchain.Block, 0)
+	for i, node :=  range BlockNodeArray {
+		if i != 0 {
+			blockchain = append(blockchain, node.Block)
+		}
+	}
+	*reply = blockchain
 
 	return nil
 }
