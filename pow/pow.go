@@ -32,6 +32,7 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 			h.Write(bytes)
 			hash := hex.EncodeToString(h.Sum(nil))
 			if Verify(hash, N) {
+				defer Recover()
 				solved <- block
 				return
 			} else {
@@ -40,4 +41,11 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 			}
 		}
 	}
+}
+
+func Recover() {
+    // recover from panic caused by writing to a closed channel
+    if r := recover(); r != nil {
+        return
+    }
 }

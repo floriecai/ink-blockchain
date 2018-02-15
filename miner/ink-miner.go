@@ -445,7 +445,7 @@ func VerifyBlock(block blockchain.Block) bool {
 
 // Returns an array of Blocks that are on the longest path and its length
 func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNodeArray []blockchain.BlockNode) ([]blockchain.Block, int) {
-	fmt.Println("running get longest path with block hash: ", initBlockHash)
+	//fmt.Println("running get longest path with block hash: ", initBlockHash)
 
 	blockChain := make([]blockchain.Block, 0)
 
@@ -716,7 +716,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 
 			// Kill current job
 			close(done)
-			//close(solved)
+			close(solved)
 
 			// Make a new channel
 			solved = make(chan blockchain.Block)
@@ -863,6 +863,7 @@ func GetBlockHashOfShapeHash(opSig string) string {
 }
 
 func PrintBlockChain(blocks []blockchain.Block){
+	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for _, block := range blocks {
 		fmt.Print("<- ", block.PrevHash, ":",block.Nonce, "->")
 	}
