@@ -6,9 +6,9 @@ with each other.
 
 Public functions:
 
-	NewPath(points []Point, filled bool) -> Path
+	NewPath(points []Point, filled bool, strokeTransparent bool) -> Path
 
-	NewCircle(xc, yc, radius int, filled bool) -> Circle
+	NewCircle(xc, yc, radius int, filled bool, strokeTransparent bool) -> Circle
 
 	NewPixelArray(xMax int, yMax int) -> PixelArray
 
@@ -84,14 +84,16 @@ type Shape interface {
 // should have len(Points) == 5 and Points[0] is equal
 // to Points[4].
 type Path struct {
-	Points []Point
-	Filled bool
+	Points            []Point
+	Filled            bool
+	StrokeFilled bool
+
 	// The below 4 values should create a rectangle that
 	// can fit the entire path within it.
-	XMin int
-	XMax int
-	YMin int
-	YMax int
+	XMin              int
+	XMax              int
+	YMin              int
+	YMax              int
 }
 
 // Point. Represents a point or pixel on a discrete 2D array.
@@ -109,9 +111,10 @@ type Point struct {
 
 // Circle. Not much more to say really.
 type Circle struct {
-	C      Point
-	R      int
-	Filled bool
+	C                 Point
+	R                 int
+	Filled            bool
+	StrokeFilled bool
 }
 
 // Used for computing shit for the Path object.

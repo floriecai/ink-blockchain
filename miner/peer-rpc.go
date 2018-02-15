@@ -94,7 +94,8 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 	if err == nil {
 		// Error is nil, should be parsable into shapelib.Path
 		return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
-			int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
+			int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent",
+			op.Stroke != "transparent")
 	}
 
 	// TODO: try parsing it as a circle
@@ -105,7 +106,7 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 	//}
 
 	// FIXME: change for circle
-	circ := shapelib.NewCircle(0, 0, 0, false)
+	circ := shapelib.NewCircle(0, 0, 0, false, false)
 	return circ, fmt.Errorf("Not a path or circle")
 }
 
@@ -114,13 +115,14 @@ func (m Miner) getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGString)
 	if err != nil {
 		fmt.Println("PropagateOp err:", err)
-		path := shapelib.NewPath(nil, false)
+		path := shapelib.NewPath(nil, false, false)
 		return path, err
 	}
 
 	// Get the shapelib.Path representation for this svg path
 	return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
-		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
+		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent",
+			op.Stroke != "transparent")
 }
 
 // This lock is intended to be used so that only one op or block will be in the
