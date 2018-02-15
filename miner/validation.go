@@ -17,7 +17,6 @@ import (
 
 const LOG_VALIDATION = true
 
-
 func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) bool {
 	//fmt.Println("ValidateBlock::TODO: Unfinished")
 
@@ -25,7 +24,7 @@ func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) b
 	testblock.MinerPubKey = block.MinerPubKey
 	// check that the block hashes correctly
 	// this is checked a lot though, do we need this? TODO
-	if VerifyBlock(block){
+	if VerifyBlock(block) {
 		for _, opinfo := range block.OpHistory {
 			testchain := append(chain, *testblock)
 			op := opinfo.Op

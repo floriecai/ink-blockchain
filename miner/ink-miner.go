@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 	"net"
@@ -56,6 +57,8 @@ var BlockNodeArray []blockchain.BlockNode
 // Key: The hash of a block
 // Val: The index of block with such hash in BlockNodeArray
 var BlockHashMap map[string]int = make(map[string]int)
+
+var BlockChainMutex *sync.Mutex
 
 // Current Job ID
 var CurrJobId int = 0
@@ -377,9 +380,16 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 /*******************************
 | Blockchain functions
 ********************************/
+func InsertBlock(newBlock blockchain.Block) (err error) {
+	BlockChainMutex.Lock()
+	log.Println("Got mutex.")
+	defer BlockChainMutex.Unlock()
+	defer log.Println("release mutex")
+	return InsertBlockRe(newBlock)
+}
 
 // Appends the new block to BlockArray and updates BlockHashMap
-func InsertBlock(newBlock blockchain.Block) (err error) {
+func InsertBlockRe(newBlock blockchain.Block) (err error) {
 	if VerifyBlock(newBlock) {
 		// Create a new node for newBlock and append it to BlockNodeArray
 		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: ParentHashMap[GetBlockHash(newBlock)]}
@@ -449,18 +459,26 @@ func GetLongestPath(initBlockHash string, blockHashMap map[string]int, blockNode
 
 	blockChain := make([]blockchain.Block, 0)
 
-	initBIndex := blockHashMap[initBlockHash]
-	blockChain = append(blockChain, blockNodeArray[initBIndex].Block)
+	initBIndex := BlockHashMap[initBlockHash]
+	blockChain = append(blockChain, BlockNodeArray[initBIndex].Block)
 
-	if len(blockNodeArray[initBIndex].Children) == 0 {
+	if len(BlockNodeArray[initBIndex].Children) == 0 {
 		return blockChain, 1
 	}
 
 	var longestPath []blockchain.Block
 	maxLen := -1
 
-	for _, childIndex := range blockNodeArray[initBIndex].Children {
-		child := blockNodeArray[childIndex]
+	for _, childIndex := range BlockNodeArray[initBIndex].Children {
+		blen := len(blockNodeArray)
+		blenn := len(BlockNodeArray)
+		if childIndex >= blenn {
+			log.Println("ERRRRR: CHILD DOESN'T EXIST: %d, blockNodeLen: %d", childIndex, len(blockNodeArray))
+			log.Println("blockNodearry param: %+v, blen: %d", blockNodeArray[initBIndex], blen)
+			log.Println("REAL BLOCKNODE param: %+v, blenn: %d", BlockNodeArray[initBIndex], blenn)
+		}
+
+		child := BlockNodeArray[childIndex]
 
 		childHash := GetBlockHash(child.Block)
 		childPath, childLen := GetLongestPath(childHash, blockHashMap, blockNodeArray)
@@ -865,13 +883,14 @@ func GetBlockHashOfShapeHash(opSig string) string {
 	return ""
 }
 
-func PrintBlockChain(blocks []blockchain.Block){
+func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
-	for _, block := range blocks {
-		fmt.Print("<- ", block.PrevHash, ":",block.Nonce, "->")
-	}
+	// for _, block := range blocks {
+	// 	fmt.Print("<- ", block.PrevHash, ":", block.Nonce, "->")
+	// }
 	fmt.Print("\n")
 }
+
 /*******************************
 | Main
 ********************************/
@@ -909,6 +928,7 @@ func main() {
 
 	// Setup Mutex for operations
 	OpMutex = &sync.Mutex{}
+	BlockChainMutex = &sync.Mutex{}
 
 	// 4. Setup Miner Heartbeat Manager
 	go ManageConnections(pop, pblock, peerconn)
