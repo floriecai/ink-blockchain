@@ -884,7 +884,8 @@ func GetBlockHashOfShapeHash(opSig string) string {
 func PrintBlockChain(blocks []blockchain.Block){
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for _, block := range blocks {
-		fmt.Print("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[0:5], ":", len(block.OpHistory)," ->")
+		fmt.Println("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[0:5], ":", len(block.OpHistory)," ->")
+	}
 	fmt.Println("Length of the blockchain: ", len(blocks))
 }
 
