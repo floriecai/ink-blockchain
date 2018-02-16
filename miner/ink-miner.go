@@ -900,7 +900,15 @@ func PrintBlockChain(blocks []blockchain.Block){
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Println("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":", len(block.OpHistory)," ->")
+			fmt.Print("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
+			for _, opinfo := range block.OpHistory {
+				if opinfo.Op.OpType == blockchain.ADD {
+					fmt.Print("-ADD-")
+				} else {
+					fmt.Print("-DELETE-")
+				}
+			}
+			fmt.Print(" ->\n")
 		} else {
 			fmt.Println("<- ", MinerInstance.Settings.GenesisBlockHash, " ->")
 		}
