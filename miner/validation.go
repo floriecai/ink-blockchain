@@ -40,13 +40,14 @@ func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) b
 // Validates a set of operations against the longest block chain
 func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) []blockchain.OperationInfo {
 	fmt.Println("ValidateOps")
-	chain, _ = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
-	PrintBlockChain(chain)
+	//chain, _ = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 	testblock := new(blockchain.Block)
 	testblock.MinerPubKey = "TESTTESTTESTTESTTESTTESTTESTTESTTEST"
 	testblock.PrevHash = "TESTTESTTESTTESTTESTTESTTESTTESTTESTTEST"
 	for _, opinfo := range ops {
-		testchain := append(chain, *testblock)
+		oldchain := make([]blockchain.Block, 0)
+		oldchain = append(oldchain, chain...)
+		testchain := append(oldchain, *testblock)
 		op := opinfo.Op
 		shape, err := MinerInstance.getShapeFromOp(op)
 		if err != nil {
@@ -66,8 +67,7 @@ func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) []blo
 		testblock.OpHistory = append(testblock.OpHistory, opinfo)
 	}
 	fmt.Println("ValidateOps done")
-	chain, _ = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
-	PrintBlockChain(chain)
+	//chain, _ = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 	return testblock.OpHistory
 }
 
