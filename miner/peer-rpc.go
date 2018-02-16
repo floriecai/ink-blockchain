@@ -97,8 +97,8 @@ func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
 
 // Get a shape interface from an operation.
 func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
-	pathlist, err := utils.GetParsedSVG(op.SVGString)
-	if err == nil {
+	pathlist, parsingErr := utils.GetParsedSVG(op.SVGString)
+	if parsingErr == nil {
 		// Error is nil, should be parsable into shapelib.Path
 		return utils.SVGToPoints(pathlist,
 			int(m.Settings.CanvasSettings.CanvasXMax),
@@ -113,7 +113,7 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 		int(m.Settings.CanvasSettings.CanvasXMax))
 	if err != nil {
 		fmt.Println("SVG string is neither circle nor path:", op.SVGString)
-		return circ, err
+		return circ, parsingErr
 	}
 
 	// FIXME: change for circle
