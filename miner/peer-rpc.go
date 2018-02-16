@@ -41,6 +41,7 @@ type PeerRpc struct {
 	opSCh  chan blockchain.OperationInfo
 	blkSCh chan blockchain.Block
 	reqCh  chan net.Addr
+	blks   map[string]Empty
 }
 
 // Empty struct. Use for filling required but unused function parameters.
@@ -174,7 +175,6 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	p.opSCh <- args.OpInfo
 
 	// Propagate op to list of connected peers.
-	// TODO: figure out a way to optimize this... don't want to revalidate ops and stuff
 	args.TTL--
 	if args.TTL > 0 {
 		p.opCh <- args
@@ -187,6 +187,13 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 // Will not return any useful information.
 func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	//fmt.Println("PropagateBlock called")
+	blkHash := GetBlockHash(args.Block)
+	if _, exists := p.blks[blkHash]; exists {
+		//fmt.Println("Ignoring already received blockhash")
+		return nil
+	} else {
+		p.blks[blkHash] = Empty{}
+	}
 
 	validateLock.Lock()
 	defer validateLock.Unlock()
@@ -199,8 +206,8 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 	// Validate the block, if the block is not valid just drop it
 	if p.miner.ValidateBlock(args.Block, path) {
-		// Propagate block to list of connected peers.
-		args.TTL--
+		// Propagate block to list of connected peers. Too lazy to get rid of TTL;
+		// it's not used any more for PropgateBlock though.
 		if args.TTL > 0 {
 			//fmt.Println("Propgation:", args.TTL)
 			p.blkCh <- args
@@ -228,10 +235,16 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
+func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
 
-	// Return a flattened version of the blockchain from somewhere
+	blockchain := make([]blockchain.Block, 0)
+	for i, node :=  range BlockNodeArray {
+		if i != 0 {
+			blockchain = append(blockchain, node.Block)
+		}
+	}
+	*reply = GetBlockChainArgs{blockchain}
 
 	return nil
 }
@@ -240,7 +253,7 @@ func (p PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 	blkCh chan PropagateBlockArgs, opSCh chan blockchain.OperationInfo,
 	blkSCh chan blockchain.Block, reqCh chan net.Addr) {
-	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh}
+	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh, make(map[string]Empty)}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
