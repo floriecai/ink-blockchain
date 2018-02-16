@@ -903,9 +903,9 @@ func PrintBlockChain(blocks []blockchain.Block){
 			fmt.Print("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
-					fmt.Print("-ADD-")
+					fmt.Print("-ADD:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
 				} else {
-					fmt.Print("-DELETE-")
+					fmt.Print("-DELETE:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
 				}
 			}
 			fmt.Print(" ->\n")
