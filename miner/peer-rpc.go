@@ -21,7 +21,6 @@ import (
 	"log"
 	"net"
 	"net/rpc"
-
 	"sync"
 
 	"../blockchain"

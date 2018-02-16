@@ -42,11 +42,15 @@ var ArtNodeList map[int]bool = make(map[int]bool)
 // List of peers WE connect TO, not peers that connect to US
 var PeerList map[string]*Peer = make(map[string]*Peer)
 
+var BlockCond *sync.Cond
+
 const (
 	// Global TTL of propagate requests
 	TTL = 2
 	// Maximum threads we will use for problem solving
 	MAX_THREADS = 4
+	// Num new blocks with no operation before repropagating op
+	BLOCKS_BEFORE_REPROPAGATE = 10
 )
 
 // Global blockchain Parent->Children Map
@@ -202,6 +206,7 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 	return err
 }
 
+
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		MinerInstance.InkAmt = CalculateInk(utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey))
@@ -239,64 +244,61 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 		lmi.SOpChan <- opInfo
 
 		blockHash := ""
-		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+		count := 0
 
 		// keep trying to validate the operation
 		for {
+			BlockCond.L.Lock()
+			BlockCond.Wait()
+			BlockCond.L.Unlock()
+
 			// Check if it conflicts with the existing canvas
 			err := ValidateOperation(op, pubKeyString, opSigStr)
 			_, ok := err.(DuplicateError)
 			if !ok {
 				if err != nil {
 					return err
-				} /*else {
+				} else {
 					// Keep count of how many times no duplicate.
 					// If too many, reattempt operation
 					count++
-					if count > 10 {
+					if count > BLOCKS_BEFORE_REPROPAGATE {
 						lmi.POpChan <- propOpArgs
 						lmi.SOpChan <- opInfo
 						fmt.Println("No dupe count too high - republishing")
 						count = 0
 					}
 
-					fmt.Println("no duplicate yet - sleep then continue...")
-					time.Sleep(1 * time.Second)
-
+					fmt.Println("no duplicate yet - wait for new block")
 					continue
-				}*/
+				}
 			}
 
 			// Keep looping until there are NumValidate blocks
 			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
 			if blockHash == "" {
-				fmt.Println("could not find a block with the hash: ", opInfo.OpSig)
-				fmt.Println("No draw yet - sleep then continue...")
-				_, newlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
-
-				if newlen > oldlen + int(drawReq.ValidateNum) {
-					fmt.Println("No op count surpassed - repropagating...")
-					lmi.POpChan <- propOpArgs
-					fmt.Println("something...")
-					lmi.SOpChan <- opInfo
-					fmt.Println("the heck??")
-					oldlen = newlen
-				}
-
-				time.Sleep(10 * time.Second)
+				fmt.Println("Weird, no block hash - sleep then continue...")
+				time.Sleep(1 * time.Second)
 				continue
 			}
 
-			_, numBlocksFollowing := GetLongestPath(blockHash)
+			chain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			numBlocksFollowing := 0
+			for i := len(chain) - 1; i >= 0; i-- {
+				blockByteData, _ := json.Marshal(chain[i])
+				hashedBlock := utils.ComputeHash(blockByteData)
+				hash := hex.EncodeToString(hashedBlock)
+				if hash == blockHash {
+					break
+				} else {
+					numBlocksFollowing++
+				}
+			}
+
 			if numBlocksFollowing >= int(drawReq.ValidateNum) {
-				response.InkRemaining = uint32(CalculateInk(pubKeyString))
-				response.ShapeHash = opInfo.OpSig
-				response.BlockHash = blockHash
-				return nil
+				break
 			} else {
-				fmt.Println("Not enough blocks for numvalidate yet:",
-					numBlocksFollowing, blockHash)
-				time.Sleep(1 * time.Second)
+				fmt.Println("Not enough blocks to validate yet:", numBlocksFollowing)
 			}
 		}
 
@@ -372,41 +374,53 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		lmi.POpChan <- propOpArgs
 		lmi.SOpChan <- opInfo
 
-		blockHash := ""
-		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+		count := 0
 
 		fmt.Println("Delete ok - waiting now")
 
 		// keep trying to validate the operation
-		for len(blockHash) == 0 {
+		for {
+			BlockCond.L.Lock()
+			BlockCond.Wait()
+			BlockCond.L.Unlock()
+
 			// Keep looping until there are NumValidate blocks
 			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
 			if blockHash == "" {
-				fmt.Println("could not find a block with the hash: ", opInfo.OpSig)
 				fmt.Println("No del yet - sleep then continue...")
-				_, newlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+				count++
 
-				if newlen > oldlen + int(deleteReq.ValidateNum) {
+				if count > BLOCKS_BEFORE_REPROPAGATE {
 					fmt.Println("No op count surpassed - repropagating...")
 					lmi.POpChan <- propOpArgs
 					fmt.Println("something...")
 					lmi.SOpChan <- opInfo
 					fmt.Println("the heck??")
-					oldlen = newlen
+					count = 0
 				}
 
-				time.Sleep(10 * time.Second)
+				fmt.Println("no duplicate yet - wait for new block")
 				continue
 			}
 
-			_, numBlocksFollowing := GetLongestPath(blockHash)
+
+			chain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			numBlocksFollowing := 0
+			for i := len(chain) - 1; i >= 0; i-- {
+				blockByteData, _ := json.Marshal(chain[i])
+				hashedBlock := utils.ComputeHash(blockByteData)
+				hash := hex.EncodeToString(hashedBlock)
+				if hash == blockHash {
+					break
+				} else {
+					numBlocksFollowing++
+				}
+			}
+
 			if numBlocksFollowing >= int(deleteReq.ValidateNum) {
-				response.InkRemaining = uint32(CalculateInk(pubKeyString))
-				return nil
+				break
 			} else {
-				fmt.Println("Not enough blocks for numvalidate(del) yet:",
-					numBlocksFollowing, blockHash)
-				time.Sleep(1 * time.Second)
+				fmt.Println("Not enough blocks to validate yet:", numBlocksFollowing)
 			}
 		}
 
@@ -551,6 +565,11 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 			existingChildren, _ := ParentHashMap[newBlock.PrevHash]
 			ParentHashMap[newBlock.PrevHash] = append(existingChildren, newBlockIndex)
 		}
+
+		BlockCond.L.Lock()
+		BlockCond.Broadcast()
+		BlockCond.L.Unlock()
+
 		//fmt.Println("parent's node with new child:", parentBlockNode)
 		return nil
 	}
@@ -1238,6 +1257,7 @@ func Recover() {
 func main() {
 	gob.Register(&net.TCPAddr{})
 	gob.Register(&elliptic.CurveParams{})
+	BlockCond = &sync.Cond{L: &sync.Mutex{}}
 	serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
 
 	// 1. Setup the singleton miner instance
