@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/rpc"
 
@@ -77,7 +78,7 @@ func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 	// - Send through request channel to Connection Manager to connect next time
 	p.reqCh <- args.Addr
 	blockchain := make([]blockchain.Block, 0)
-	for i, node :=  range BlockNodeArray {
+	for i, node := range BlockNodeArray {
 		if i != 0 {
 			blockchain = append(blockchain, node.Block)
 		}
@@ -131,7 +132,7 @@ func (m Miner) getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	// Get the shapelib.Path representation for this svg path
 	return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
 		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent",
-			op.Stroke != "transparent")
+		op.Stroke != "transparent")
 }
 
 // This lock is intended to be used so that only one op or block will be in the
@@ -155,9 +156,11 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	subarr, inkRequired := shape.SubArrayAndCost()
 
 	validateLock.Lock()
+	log.Println("Got ValidateLock in Pop")
+	defer log.Println("Release ValidateLock in Pop")
 	defer validateLock.Unlock()
 
-	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 	if args.OpInfo.Op.OpType == blockchain.ADD {
 		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString)
 	} else {
@@ -180,16 +183,21 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	return nil
 }
 
+var msgLock sync.Mutex
+
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
 func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	//fmt.Println("PropagateBlock called")
+	msgLock.Lock()
 	blkHash := GetBlockHash(args.Block)
 	if _, exists := p.blks[blkHash]; exists {
 		//fmt.Println("Ignoring already received blockhash")
+		msgLock.Unlock()
 		return nil
 	} else {
 		p.blks[blkHash] = Empty{}
+		msgLock.Unlock()
 	}
 
 	validateLock.Lock()
@@ -197,7 +205,7 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 	// Find the path that the block should be on, no guarantee it is the longest
 	path, err := GetPath(args.Block.PrevHash, BlockHashMap, BlockNodeArray)
-	if CheckError(err, "PropagateBlock:GetPath"){
+	if CheckError(err, "PropagateBlock:GetPath") {
 		return nil
 	}
 
@@ -211,14 +219,14 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 		}
 
 		// Snapshot the current longest path
-		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 		lastblock := longest[length-1]
 
 		// - Add block to block chain.
 		InsertBlock(args.Block)
 
 		// Check if the longest path changed
-		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 		newlastblock := newlongest[newlength-1]
 
 		// If the longest path changed we should build off of it so send it to problem solver

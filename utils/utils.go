@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
-	"regexp"
 
 	"../blockchain"
 	"../libminer"
@@ -228,7 +228,7 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 	// Check if any other point other than the first has a "move". If so,
 	// the fill check is different.
 	var moved = false
-	for i := 1; i <  len(points); i++ {
+	for i := 1; i < len(points); i++ {
 		if points[i].Moved {
 			moved = true
 		}
@@ -265,7 +265,7 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 
 			// Check the last moved section
 			if startPoint.X != prevPoint.X ||
-					startPoint.Y != prevPoint.Y {
+				startPoint.Y != prevPoint.Y {
 				return path, libminer.InvalidShapeSvgStringError("")
 			}
 		}
@@ -319,7 +319,7 @@ func GetParsedCirc(op blockchain.Operation, canvasX int, canvasY int) (shapelib.
 		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
 	}
 
-	if x + r > uint64(canvasX) || y + r > uint64(canvasY) {
+	if x+r > uint64(canvasX) || y+r > uint64(canvasY) {
 		return circ, libminer.OutOfBoundsError{}
 	}
 
