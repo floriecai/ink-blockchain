@@ -30,35 +30,11 @@ func main() {
 		return
 	}
 
-	// Add an overlapping line (perpendicular)
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 100 101 l 2 0", "transparent", "black")
-	if err == nil || !err.(blockartlib.ShapeOverlapError) {
-		fmt.Println("Expected ShapeOverlapError")
-	}
-
-	// Add an overlapping line (parallel)
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 101 100 l 0 1", "transparent", "black")
-	if err == nil || !err.(blockartlib.ShapeOverlapError) {
-		fmt.Println("Expected ShapeOverlapError")
-	}
-
 	// Case h
 	// Add a line
 	shapeHash3, blockHash3, ink3, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 100 101 h 2" "transparent", "black")
 	if checkError(err) != nil {
 		return
-	}
-
-	// Add an overlapping line (perpendicular)
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 101 100 v 2", "transparent", "black")
-	if err == nil || !err.(blockartlib.ShapeOverlapError) {
-		fmt.Println("Expected ShapeOverlapError")
-	}
-
-	// Add an overlapping line (parallel)
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 100 101 h 1", "transparent", "black")
-	if err == nil || !err.(blockartlib.ShapeOverlapError) {
-		fmt.Println("Expected ShapeOverlapError")
 	}
 	
 	// Case v
@@ -66,18 +42,6 @@ func main() {
 	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 201 200 v 2" "transparent", "black")
 	if checkError(err) != nil {
 		return
-	}
-
-	// Add an overlapping line (perpendicular)
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 200 201 h 2", "transparent", "black")
-	if err == nil || !err.(blockartlib.ShapeOverlapError) {
-		fmt.Println("Expected ShapeOverlapError")
-	}
-
-	// Add an overlapping line (parallel)
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 201 200 v 1", "transparent", "black")
-	if err == nil || !err.(blockartlib.ShapeOverlapError) {
-		fmt.Println("Expected ShapeOverlapError")
 	}
 
 	// Close the canvas.

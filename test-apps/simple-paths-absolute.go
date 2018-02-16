@@ -16,7 +16,7 @@ func main() {
 	privKey, _ := x509.ParseECPrivateKey(privateKeyBytes)
 
 	// Open a canvas.
-	canvas, settings, err := blockartlib.OpenCanvas(minerAddr, privKey)
+	canvas, _, err := blockartlib.OpenCanvas(minerAddr, privKey)
 	if checkError(err) != nil {
 		return
 	}
@@ -24,25 +24,40 @@ func main() {
     validateNum := 2
 
 	// Case L
-	shapeHash1, blockHash1, ink1, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 1 0 L 1 2", "transparent", "black")
+	shapeHash1, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 1 0 L 1 2", "transparent", "black")
+	if checkError(err) != nil {
+		return
+	}
+
+	_, err = canvas.DeleteShape(validateNum, shapeHash1)
 	if checkError(err) != nil {
 		return
 	}
 
 	// Case H
-	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 100 100 H 1", "transparent", "black")
+	shapeHash2, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 100 100 H 1", "transparent", "black")
 	if err == nil || !err.(blockartlib.ShapeOverlapError) {
 		fmt.Println("Expected ShapeOverlapError")
 	}
+
+	_, err = canvas.DeleteShape(validateNum, shapeHash2)
+	if checkError(err) != nil {
+		return
+	}
 	
 	// Case V
-	shapeHash3, blockHash3, ink3, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 200 200 V 1", "transparent", "black")
+	shapeHash3, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 200 200 V 1", "transparent", "black")
+	if checkError(err) != nil {
+		return
+	}
+
+	_, err = canvas.DeleteShape(validateNum, shapeHash3)
 	if checkError(err) != nil {
 		return
 	}
 
 	// Close the canvas.
-	ink3, err := canvas.CloseCanvas()
+	_, err := canvas.CloseCanvas()
 	if checkError(err) != nil {
 		return
 	}
