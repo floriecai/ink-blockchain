@@ -306,7 +306,7 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 
 		MinerInstance.POpChan <- propOpArgs
 
-		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 		lmi.POpChan <- propOpArgs
 		lmi.SOpChan <- opInfo
 
@@ -314,7 +314,7 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		// keep trying to validate the operation
 		for len(blockHash) == 0 {
 			// Check if it conflicts with the existing canvas
-			path, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+			path, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 			err := MinerInstance.checkDeletion(opInfo.OpSig, pubKeyString, path)
 
 			if err != nil {
@@ -325,7 +325,7 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 			currlen := oldlen
 			for currlen < oldlen + int(deleteReq.ValidateNum) {
 				time.Sleep(10 * time.Second)
-				_, currlen = GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+				_, currlen = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 			}
 
 			blockHash = GetBlockHashOfShapeHash(opInfo.OpSig)
