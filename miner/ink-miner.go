@@ -45,7 +45,7 @@ const (
 	// Global TTL of propagate requests
 	TTL = 2
 	// Maximum threads we will use for problem solving
-	MAX_THREADS = 2
+	MAX_THREADS = 4
 )
 
 // Global blockchain Parent->Children Map
@@ -225,6 +225,7 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 		opSig, _ := MinerInstance.PrivKey.Sign(rand.Reader, opBytes, nil)
 		opSigStr := hex.EncodeToString(opSig)
 		opInfo := blockchain.OperationInfo{
+			AddSig: "",
 			OpSig:  opSigStr,
 			PubKey: pubKeyString,
 			Op:     op}
@@ -280,7 +281,8 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 				response.BlockHash = blockHash
 				return nil
 			} else {
-				fmt.Println("Not enough blocks for numvalidate yet:", numBlocksFollowing, blockHash)
+				fmt.Println("Not enough blocks for numvalidate yet:",
+					numBlocksFollowing, blockHash)
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -300,8 +302,16 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		var deleteReq libminer.DeleteRequest
 		json.Unmarshal(req.Msg, &deleteReq)
 		pubKeyString := utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)
+		fmt.Println("Delete called!")
 
-		// Find the ADD Operation
+		// Check if deletion is allowed
+		path, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+		err := MinerInstance.checkDeletion(deleteReq.ShapeHash, pubKeyString, path)
+		if err != nil {
+			return err
+		}
+
+		// Find the ADD Operation for metadata
 		addBlockHash := GetBlockHashOfShapeHash(deleteReq.ShapeHash)
 		if addBlockHash == "" {
 			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
@@ -314,10 +324,6 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 				addOpInfo = addInfo
 				break
 			}
-		}
-
-		if addOpInfo.Op.OpType != blockchain.ADD {
-			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
 		}
 
 		OpMutex.Lock()
@@ -335,6 +341,7 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		opBytes, _ := json.Marshal(op)
 		opSig, _ := MinerInstance.PrivKey.Sign(rand.Reader, opBytes, nil)
 		opInfo := blockchain.OperationInfo{
+			AddSig: deleteReq.ShapeHash,
 			OpSig:  hex.EncodeToString(opSig),
 			PubKey: pubKeyString,
 			Op:     op}
@@ -343,31 +350,44 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 			OpInfo: opInfo,
 			TTL:    TTL}
 
-		MinerInstance.POpChan <- propOpArgs
-
-		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 		lmi.POpChan <- propOpArgs
 		lmi.SOpChan <- opInfo
 
 		blockHash := ""
+		count := 0
+
+		fmt.Println("Delete ok - waiting now")
+
 		// keep trying to validate the operation
 		for len(blockHash) == 0 {
-			// Check if it conflicts with the existing canvas
-			path, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
-			err := MinerInstance.checkDeletion(opInfo.OpSig, pubKeyString, path)
-
-			if err != nil {
-				return err
-			}
-
 			// Keep looping until there are NumValidate blocks
-			currlen := oldlen
-			for currlen < oldlen+int(deleteReq.ValidateNum) {
-				time.Sleep(10 * time.Second)
-				_, currlen = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
+			if blockHash == "" {
+				fmt.Println("No del yet - sleep then continue...")
+				count++
+
+				if count > 10 {
+					fmt.Println("No op count surpassed - repropagating...")
+					lmi.POpChan <- propOpArgs
+					fmt.Println("something...")
+					lmi.SOpChan <- opInfo
+					fmt.Println("the heck??")
+					count = 0
+				}
+
+				time.Sleep(1 * time.Second)
+				continue
 			}
 
-			blockHash = GetBlockHashOfShapeHash(opInfo.OpSig)
+			_, numBlocksFollowing := GetLongestPath(blockHash)
+			if numBlocksFollowing >= int(deleteReq.ValidateNum) {
+				response.InkRemaining = uint32(CalculateInk(pubKeyString))
+				return nil
+			} else {
+				fmt.Println("Not enough blocks for numvalidate(del) yet:",
+					numBlocksFollowing, blockHash)
+				time.Sleep(1 * time.Second)
+			}
 		}
 
 		response.InkRemaining = uint32(CalculateInk(pubKeyString))

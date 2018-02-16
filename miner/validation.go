@@ -53,7 +53,7 @@ func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) []blo
 		if opinfo.Op.OpType == blockchain.ADD {
 			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, opinfo.PubKey, testchain, op.SVGString, opinfo.OpSig)
 		} else {
-			err = MinerInstance.checkDeletion(opinfo.OpSig, opinfo.PubKey, testchain)
+			err = MinerInstance.checkDeletion(opinfo.AddSig, opinfo.PubKey, testchain)
 		}
 		if err != nil {
 			continue
@@ -196,17 +196,18 @@ func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Bl
 		for j := 0; j < len(block.OpHistory); j++ {
 			opInfo := block.OpHistory[j]
 
-			if opInfo.PubKey == pubkey && opInfo.OpSig == sHash {
-				if opInfo.Op.OpType == blockchain.ADD {
+			if opInfo.PubKey == pubkey {
+				if opInfo.OpSig == sHash {
+					fmt.Println("Shape exists, cool")
 					delAllowed = true
-				} else {
+				} else if opInfo.AddSig == sHash {
+					fmt.Println("Deleted already?! Oh no!")
 					delAllowed = false
 					goto breakOuterLoop
 				}
 			}
 		}
 	}
-
 breakOuterLoop:
 
 	if !delAllowed {

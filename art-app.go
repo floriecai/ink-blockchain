@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	minerAddr := "127.0.0.1:42491"
+	minerAddr := "127.0.0.1:44847"
 
 	privKeyString := "3081a4020101043069f5ffffd085b51a78166f766330f4771674d8cadfd4bc3556082d59fcaa8d56a74e487e125318c0abb0c71e3852b341a00706052b81040022a164036200043bda4ebb0d9f3d2270e41ce140b889bdb94e889fb7c1b0f082c9919bbb5cde31af295da333e5f216336bface06843b0f5ef7b36d1ab0b28bbe458559b8d48df15763e2e6e955f8102aca1c5e8413a248547ece44bc1be5326debc14cb8add5ed"
 	privateKeyBytes, _ := hex.DecodeString(privKeyString)
@@ -37,7 +37,7 @@ func main() {
 	fmt.Println(canvas)
 	fmt.Println(settings)
 
-	validateNum := uint8(2)
+	validateNum := uint8(3)
 
 	// Add a line.
 	shapeHash, blockHash, ink, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
@@ -46,13 +46,13 @@ func main() {
 	}
 
 	fmt.Println("added a line:", shapeHash, blockHash, ink)
-	// Add another line.
-	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "blue")
-	if checkError(err) != nil {
-		return
-	}
-
-	fmt.Println("added another line", shapeHash2, blockHash2, ink2)
+//	// Add another line.
+//	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "blue")
+//	if checkError(err) != nil {
+//		return
+//	}
+//
+//	fmt.Println("added another line", shapeHash2, blockHash2, ink2)
 
 	fmt.Println("deleting a line!")
 	// Delete the first line.

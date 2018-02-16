@@ -164,7 +164,11 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	if args.OpInfo.Op.OpType == blockchain.ADD {
 		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString, args.OpInfo.OpSig)
 	} else {
-		err = p.miner.checkDeletion(args.OpInfo.OpSig, args.OpInfo.PubKey, blocks)
+		fmt.Println("Checking deletion")
+		err = p.miner.checkDeletion(args.OpInfo.AddSig, args.OpInfo.PubKey, blocks)
+		if err != nil {
+			fmt.Println("DELETE WAS BAD!!!")
+		}
 	}
 
 	if err != nil {
