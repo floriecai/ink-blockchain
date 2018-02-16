@@ -23,7 +23,7 @@ func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) b
 
 	// check that the block hashes correctly
 	// this is checked a lot though, do we need this? TODO
-	if VerifyBlock(block){
+	if VerifyBlock(block) {
 		validatedops := ValidateOps(block.OpHistory, chain)
 		if len(validatedops) == len(block.OpHistory) {
 			return true
@@ -34,30 +34,30 @@ func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) b
 }
 
 // Validates a set of operations against the longest block chain
-func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) ([]blockchain.OperationInfo) {
-		testblock := new(blockchain.Block)
-		testblock.MinerPubKey = ""
-		for _, opinfo := range ops {
-			testchain := append(chain, *testblock)
-			op := opinfo.Op
-			shape, err := MinerInstance.getShapeFromOp(op)
-			if err != nil {
-				continue
-			}
-
-			subarr, inkRequired := shape.SubArrayAndCost()
-			if opinfo.Op.OpType == blockchain.ADD{
-				err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, opinfo.PubKey, testchain, op.SVGString)
-			}	else {
-				err = MinerInstance.checkDeletion(opinfo.OpSig, opinfo.PubKey, testchain)
-			}
-			if err != nil {
-				continue
-			}
-
-			testblock.OpHistory = append(testblock.OpHistory, opinfo)
+func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) []blockchain.OperationInfo {
+	testblock := new(blockchain.Block)
+	testblock.MinerPubKey = ""
+	for _, opinfo := range ops {
+		testchain := append(chain, *testblock)
+		op := opinfo.Op
+		shape, err := MinerInstance.getShapeFromOp(op)
+		if err != nil {
+			continue
 		}
-		return testblock.OpHistory
+
+		subarr, inkRequired := shape.SubArrayAndCost()
+		if opinfo.Op.OpType == blockchain.ADD {
+			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, opinfo.PubKey, testchain, op.SVGString)
+		} else {
+			err = MinerInstance.checkDeletion(opinfo.OpSig, opinfo.PubKey, testchain)
+		}
+		if err != nil {
+			continue
+		}
+
+		testblock.OpHistory = append(testblock.OpHistory, opinfo)
+	}
+	return testblock.OpHistory
 }
 
 // Checks if there are overlaps and enough ink

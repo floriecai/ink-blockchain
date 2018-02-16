@@ -204,10 +204,7 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	defer validateLock.Unlock()
 
 	// Find the path that the block should be on, no guarantee it is the longest
-	path, err := GetPath(args.Block.PrevHash, BlockHashMap, BlockNodeArray)
-	if CheckError(err, "PropagateBlock:GetPath") {
-		return nil
-	}
+	path := GetPath(args.Block.PrevHash)
 
 	// Validate the block, if the block is not valid just drop it
 	if p.miner.ValidateBlock(args.Block, path) {
@@ -244,7 +241,7 @@ func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 	fmt.Println("GetBlockChain called")
 
 	blockchain := make([]blockchain.Block, 0)
-	for i, node :=  range BlockNodeArray {
+	for i, node := range BlockNodeArray {
 		if i != 0 {
 			blockchain = append(blockchain, node.Block)
 		}
