@@ -45,7 +45,7 @@ const (
 	// Global TTL of propagate requests
 	TTL = 2
 	// Maximum threads we will use for problem solving
-	MAX_THREADS = 1
+	MAX_THREADS = 2
 )
 
 // Global blockchain Parent->Children Map
@@ -223,8 +223,9 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 		// Disseminate Operation
 		opBytes, _ := json.Marshal(op)
 		opSig, _ := MinerInstance.PrivKey.Sign(rand.Reader, opBytes, nil)
+		opSigStr := hex.EncodeToString(opSig)
 		opInfo := blockchain.OperationInfo{
-			OpSig:  hex.EncodeToString(opSig),
+			OpSig:  opSigStr,
 			PubKey: pubKeyString,
 			Op:     op}
 
@@ -236,27 +237,51 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 		lmi.SOpChan <- opInfo
 
 		blockHash := ""
-		// keep trying to validate the operation
-		for len(blockHash) == 0 {
-			// Check if it conflicts with the existing canvas
-			err := ValidateOperation(op, pubKeyString)
+		count := 0
 
-			if err != nil {
-				return err
+		// keep trying to validate the operation
+		for {
+			// Check if it conflicts with the existing canvas
+			err := ValidateOperation(op, pubKeyString, opSigStr)
+			_, ok := err.(DuplicateError)
+			if !ok {
+				if err != nil {
+					return err
+				} else {
+					// Keep count of how many times no duplicate.
+					// If too many, reattempt operation
+					count++
+					if count > 10 {
+						lmi.POpChan <- propOpArgs
+						lmi.SOpChan <- opInfo
+						fmt.Println("No dupe count too high - republishing")
+						count = 0
+					}
+
+					fmt.Println("no duplicate yet - sleep then continue...")
+					time.Sleep(1 * time.Second)
+
+					continue
+				}
 			}
 
 			// Keep looping until there are NumValidate blocks
-			for {
-				blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
-				_, numBlocksFollowing := GetLongestPath(blockHash)
-				if numBlocksFollowing >= int(drawReq.ValidateNum) {
-					response.InkRemaining = uint32(CalculateInk(pubKeyString))
-					response.ShapeHash = opInfo.OpSig
-					response.BlockHash = blockHash
-					return nil
-				}
+			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
+			if blockHash == "" {
+				fmt.Println("Weird, no block hash - sleep then continue...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
 
-				blockHash = GetBlockHashOfShapeHash(opInfo.OpSig)
+			_, numBlocksFollowing := GetLongestPath(blockHash)
+			if numBlocksFollowing >= int(drawReq.ValidateNum) {
+				response.InkRemaining = uint32(CalculateInk(pubKeyString))
+				response.ShapeHash = opInfo.OpSig
+				response.BlockHash = blockHash
+				return nil
+			} else {
+				fmt.Println("Not enough blocks for numvalidate yet:", numBlocksFollowing, blockHash)
+				time.Sleep(1 * time.Second)
 			}
 		}
 
@@ -474,8 +499,10 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 		//      2) The parent has yet to arrive
 		//			- When the parent arrives, it will append all the pending children in ParentHashMap
 		if parentIndex, ok := ReadBlockChainMap(newBlock.PrevHash); ok {
-			parentBlockNode := BlockNodeArray[parentIndex]
+			BlockArrayMutex.Lock()
+			parentBlockNode := &BlockNodeArray[parentIndex]
 			parentBlockNode.Children = append(parentBlockNode.Children, newBlockIndex)
+			BlockArrayMutex.Unlock()
 		} else {
 			ParentMapMutex.Lock()
 			defer ParentMapMutex.Unlock()
@@ -1066,7 +1093,7 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Print("<- ", block.PrevHash[0:5], ":", block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
+			fmt.Print("<- ", block.PrevHash, ":", block.Nonce, ":", block.MinerPubKey, ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
 					fmt.Print("-ADD:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")

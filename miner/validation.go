@@ -9,12 +9,16 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"../blockchain"
 	"../libminer"
 	"../shapelib"
 )
+
+type DuplicateError string
+func (e DuplicateError) Error() string {
+	return fmt.Sprintf("Duplicate shapehash: %s", string(e))
+}
 
 const LOG_VALIDATION = true
 
@@ -47,7 +51,7 @@ func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) []blo
 
 		subarr, inkRequired := shape.SubArrayAndCost()
 		if opinfo.Op.OpType == blockchain.ADD {
-			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, opinfo.PubKey, testchain, op.SVGString)
+			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, opinfo.PubKey, testchain, op.SVGString, opinfo.OpSig)
 		} else {
 			err = MinerInstance.checkDeletion(opinfo.OpSig, opinfo.PubKey, testchain)
 		}
@@ -61,7 +65,7 @@ func ValidateOps(ops []blockchain.OperationInfo, chain []blockchain.Block) []blo
 }
 
 // Checks if there are overlaps and enough ink
-func ValidateOperation(op blockchain.Operation, pubKey string) error {
+func ValidateOperation(op blockchain.Operation, pubKey string, opSig string) error {
 	shape, err := MinerInstance.getShapeFromOp(op)
 	if err != nil {
 		return err
@@ -70,12 +74,10 @@ func ValidateOperation(op blockchain.Operation, pubKey string) error {
 	subarr, inkRequired := shape.SubArrayAndCost()
 
 	validateLock.Lock()
-	log.Println("Got ValidateLock in vOp")
-	defer log.Println("Release ValidateLock in vOp")
 	defer validateLock.Unlock()
 
 	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
-	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
+	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString, opSig)
 
 	if err != nil {
 		return err
@@ -86,7 +88,7 @@ func ValidateOperation(op blockchain.Operation, pubKey string) error {
 
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
-	pubkey string, blocks []blockchain.Block, svgString string) error {
+	pubkey string, blocks []blockchain.Block, svgString string, opSig string) error {
 	if LOG_VALIDATION {
 		fmt.Println("checkInkAndConflicts called")
 	}
@@ -117,6 +119,10 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 			op := opInfo.Op
 
 			if opInfo.PubKey == pubkey {
+				if opInfo.OpSig == opSig {
+					return DuplicateError("opSig")
+				}
+
 				shape, err := m.getShapeFromOp(op)
 				if err != nil {
 					fmt.Println("CRITICAL ERROR: BAD SHAPE IN BLOCKCHAIN")
@@ -175,7 +181,7 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 // Function used to determine if a delete operation is allowed on the blockchain.
 func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Block) error {
 	if LOG_VALIDATION {
-		fmt.Println("checkInkAndConflicts called")
+		fmt.Println("checkDeletion called")
 	}
 
 	delAllowed := false
