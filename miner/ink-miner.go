@@ -239,7 +239,7 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 		lmi.SOpChan <- opInfo
 
 		blockHash := ""
-		count := 0
+		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 
 		// keep trying to validate the operation
 		for {
@@ -249,7 +249,7 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 			if !ok {
 				if err != nil {
 					return err
-				} else {
+				} /*else {
 					// Keep count of how many times no duplicate.
 					// If too many, reattempt operation
 					count++
@@ -264,14 +264,26 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 					time.Sleep(1 * time.Second)
 
 					continue
-				}
+				}*/
 			}
 
 			// Keep looping until there are NumValidate blocks
 			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
 			if blockHash == "" {
-				fmt.Println("Weird, no block hash - sleep then continue...")
-				time.Sleep(1 * time.Second)
+				fmt.Println("could not find a block with the hash: ", opInfo.OpSig)
+				fmt.Println("No draw yet - sleep then continue...")
+				_, newlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+
+				if newlen > oldlen + int(drawReq.ValidateNum) {
+					fmt.Println("No op count surpassed - repropagating...")
+					lmi.POpChan <- propOpArgs
+					fmt.Println("something...")
+					lmi.SOpChan <- opInfo
+					fmt.Println("the heck??")
+					oldlen = newlen
+				}
+
+				time.Sleep(10 * time.Second)
 				continue
 			}
 
@@ -361,7 +373,7 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		lmi.SOpChan <- opInfo
 
 		blockHash := ""
-		count := 0
+		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 
 		fmt.Println("Delete ok - waiting now")
 
@@ -370,19 +382,20 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 			// Keep looping until there are NumValidate blocks
 			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
 			if blockHash == "" {
+				fmt.Println("could not find a block with the hash: ", opInfo.OpSig)
 				fmt.Println("No del yet - sleep then continue...")
-				count++
+				_, newlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 
-				if count > 10 {
+				if newlen > oldlen + int(deleteReq.ValidateNum) {
 					fmt.Println("No op count surpassed - repropagating...")
 					lmi.POpChan <- propOpArgs
 					fmt.Println("something...")
 					lmi.SOpChan <- opInfo
 					fmt.Println("the heck??")
-					count = 0
+					oldlen = newlen
 				}
 
-				time.Sleep(1 * time.Second)
+				time.Sleep(10 * time.Second)
 				continue
 			}
 
@@ -840,11 +853,17 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs,
 	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
+	count := 0
 	for {
 		select {
 		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
-			PeerHeartBeats()
+			if count == 50{
+				PeerSync()
+				count = 0
+			} else {
+				PeerHeartBeats()
+			}
 		case addr := <-peerconn:
 			// Connection request from peerRpc
 			addrSet := []net.Addr{addr}
@@ -861,6 +880,22 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs,
 				var addrSet []net.Addr
 				MinerInstance.MSI.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
 				MinerInstance.MSI.GetPeers(addrSet)
+			}
+		}
+	}
+}
+
+// Try to sync up with peers once in a while
+func PeerSync() {
+	fmt.Println("Performing a sync")
+	for addr, peer := range PeerList {
+		var blockchainResp []blockchain.Block
+		empty := new(Empty)
+		err := peer.Client.Call("Peer.GetBlockChain", empty, &blockchainResp)
+		if !CheckError(err, "PeerSync:"+addr) {
+			peer.LastHeartBeat = time.Now()
+			for _, block := range blockchainResp {
+				InsertBlock(block)
 			}
 		}
 	}
@@ -975,14 +1010,16 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			// Assume this was block was validated
 			// Assume this block has already been inserted
 			chain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			workingSet = ValidateOps(workingSet, chain)
 			if len(workingSet) == 0 {
 				done = NoopJob(GetBlockHash(block), solved)
 			} else {
-				workingSet = ValidateOps(workingSet, chain)
 				done = OpJob(GetBlockHash(block), workingSet, solved)
 			}
 		case sol := <-solved:
-			fmt.Println("got a solution", sol.Nonce)
+			if len(sol.OpHistory) > 0 {
+				fmt.Println("got a solution", sol.OpHistory[0])
+			}
 
 			// Kill current job
 			close(done)
@@ -1007,7 +1044,6 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 				fmt.Println("Initiating the first job")
 				done = NoopJob(MinerInstance.Settings.GenesisBlockHash, solved)
 			}
-			// Wait for current job to change
 		}
 	}
 }
@@ -1015,6 +1051,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 // Initiate a job with an empty op array and a blockhash
 func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 	CurrJobId++
+	fmt.Println("Starting job:", CurrJobId)
 	block := blockchain.Block{PrevHash: hash,
 		MinerPubKey: utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
@@ -1030,6 +1067,7 @@ func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 // Initiate a job with a predefined op array
 func OpJob(hash string, Ops []blockchain.OperationInfo, solved chan blockchain.Block) chan bool {
 	CurrJobId++
+	fmt.Println("Starting job:", CurrJobId)
 	block := blockchain.Block{PrevHash: hash,
 		OpHistory:   Ops,
 		MinerPubKey: utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)}
@@ -1145,12 +1183,12 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Print("<- ", block.PrevHash, ":", block.Nonce, ":", block.MinerPubKey, ":")
+			fmt.Print("<- ", /*block.PrevHash, ":", block.Nonce, ":", block.MinerPubKey,*/ ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
-					fmt.Print("-ADD:", opinfo.Op.SVGString, "-")
+					fmt.Print("-ADD:", opinfo.Op.SVGString, ":", opinfo.OpSig,"-")
 				} else {
-					fmt.Print("-DELETE:", opinfo.Op.SVGString, "-")
+					fmt.Print("-DELETE:", opinfo.Op.SVGString, ":", opinfo.OpSig,"-")
 				}
 			}
 			fmt.Print(" ->\n")

@@ -241,16 +241,16 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
+func (p *PeerRpc) GetBlockChain(args Empty, reply *[]blockchain.Block) error {
 	fmt.Println("GetBlockChain called")
 
-	blockchain := make([]blockchain.Block, 0)
+	chain := make([]blockchain.Block, 0)
 	for i, node := range BlockNodeArray {
 		if i != 0 {
-			blockchain = append(blockchain, node.Block)
+			chain = append(chain, node.Block)
 		}
 	}
-	*reply = GetBlockChainArgs{blockchain}
+	*reply = chain
 
 	return nil
 }
