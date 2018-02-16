@@ -183,16 +183,21 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	return nil
 }
 
+var msgLock sync.Mutex
+
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
 func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	//fmt.Println("PropagateBlock called")
+	msgLock.Lock()
 	blkHash := GetBlockHash(args.Block)
 	if _, exists := p.blks[blkHash]; exists {
 		//fmt.Println("Ignoring already received blockhash")
+		msgLock.Unlock()
 		return nil
 	} else {
 		p.blks[blkHash] = Empty{}
+		msgLock.Unlock()
 	}
 
 	validateLock.Lock()
