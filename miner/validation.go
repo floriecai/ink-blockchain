@@ -99,10 +99,10 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 	// of this pubkey.
 	for i := 0; i < len(blocks); i++ {
 		block := blocks[i]
-		fmt.Println("comparing pub keys:")
-		fmt.Println(block.MinerPubKey)
-		fmt.Println("vs")
-		fmt.Println(pubkey)
+		//fmt.Println("comparing pub keys:")
+		//fmt.Println(block.MinerPubKey)
+		//fmt.Println("vs")
+		//fmt.Println(pubkey)
 		numOps := len(block.OpHistory)
 		if block.MinerPubKey == pubkey {
 			if numOps > 0 {
