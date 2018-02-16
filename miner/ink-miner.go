@@ -381,7 +381,8 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 
 // Appends the new block to BlockArray and updates BlockHashMap
 func InsertBlock(newBlock blockchain.Block) (err error) {
-	if VerifyBlock(newBlock) {
+	if _, ok := BlockHashMap[GetBlockHash(newBlock)]; !ok && VerifyBlock(newBlock) {
+		fmt.Println("inserting:< ", newBlock.PrevHash, ":", newBlock.Nonce)
 		// Create a new node for newBlock and append it to BlockNodeArray
 		newBlockNode := blockchain.BlockNode{Block: newBlock, Children: ParentHashMap[GetBlockHash(newBlock)]}
 
@@ -580,7 +581,6 @@ func (msi *MinerServerInterface) GetPeers(addrSet []net.Addr) {
 				continue
 			}
 			for _, block := range blockchainResp {
-				fmt.Println("inserting:< ", block.PrevHash, ":", block.Nonce)
 				InsertBlock(block)
 			}
 			PeerList[addr.String()] = &Peer{client, time.Now()}
