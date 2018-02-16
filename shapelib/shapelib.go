@@ -6,9 +6,9 @@ with each other.
 
 Public functions:
 
-	NewPath(points []Point, filled bool) -> Path
+	NewPath(points []Point, filled bool, strokeTransparent bool) -> Path
 
-	NewCircle(xc, yc, radius int, filled bool) -> Circle
+	NewCircle(xc, yc, radius int, filled bool, strokeTransparent bool) -> Circle
 
 	NewPixelArray(xMax int, yMax int) -> PixelArray
 
@@ -24,17 +24,23 @@ Public types and methods:
 
 	PixelSubArray
 	  Print()
-	  GetPixelsFilled() -> int
+	  PixelsFilled() -> int
 
 	Point
 
+	Shape
+	  SubArray()        -> PixelSubArray
+	  SubArrayAndCost() -> int
+
 	Path
-	  GetSubArray() -> PixelSubArray
-	  TotalLength() -> int
+	  SubArray()        -> PixelSubArray
+	  TotalLength()     -> int
+	  SubArrayAndCost() -> int
 
 	Circle
-	  GetSubArray() -> PixelSubArray
-	  Circumference() -> int
+	  SubArray()        -> PixelSubArray
+	  Circumference()   -> int
+	  SubArrayAndCost() -> int
 
 
 This file in particular contains all type definitions and some misc. functions.
@@ -59,20 +65,35 @@ type PixelSubArray struct {
 	yStart     int
 }
 
+// Interface for a shape that can return its subarray of pixel filled.
+type Shape interface {
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape.
+	SubArray() PixelSubArray
+
+	// Returns the PixelSubArray that represents the pixels filled on
+	// a pixel array for this particular shape, as well as the cost that
+	// is associated with the shape.
+	SubArrayAndCost() (subarr PixelSubArray, cost int)
+}
+
 // Represents the data of a Path SVG item.
 // Any closed shape must have the last point in the
 // array be equal to the first point. So a quadrilateral
 // should have len(Points) == 5 and Points[0] is equal
 // to Points[4].
 type Path struct {
-	Points []Point
-	Filled bool
+	Points            []Point
+	Filled            bool
+	StrokeFilled bool
+
 	// The below 4 values should create a rectangle that
 	// can fit the entire path within it.
-	XMin int
-	XMax int
-	YMin int
-	YMax int
+	XMin              int
+	XMax              int
+	YMin              int
+	YMax              int
 }
 
 // Point. Represents a point or pixel on a discrete 2D array.
@@ -90,9 +111,10 @@ type Point struct {
 
 // Circle. Not much more to say really.
 type Circle struct {
-	C      Point
-	R      int
-	Filled bool
+	C                 Point
+	R                 int
+	Filled            bool
+	StrokeFilled bool
 }
 
 // Used for computing shit for the Path object.

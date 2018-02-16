@@ -43,7 +43,7 @@ type MinerNetSettings struct {
 }
 
 type MinerInfo struct {
-	Address net.Addr 
+	Address net.Addr
 	Key     ecdsa.PublicKey
 }
 

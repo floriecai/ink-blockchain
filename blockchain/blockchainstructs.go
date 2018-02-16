@@ -7,22 +7,33 @@ const (
 	DELETE
 )
 
+type ShapeHash struct {
+	OpNum uint64 // Unique ID for each shapehash
+}
+
 type Operation struct {
-	ShapeHash string
-	OpSig     string
 	OpType    OpType
-	SVGOp     string
-	PubKey    string
+	SVGString string // svg "path" that was passed in e.g. M 0 0 H 10 V 20 Z
+	Fill      string
+	Stroke    string
+	OpNum     uint64 // Unique id for operations
+}
+
+type OperationInfo struct {
+	AddSig string // empty str for ADD, OpSig of corresponding ADD for a DELETE
+	OpSig  string // The shapehash that we will return
+	PubKey string
+	Op     Operation
 }
 
 type Block struct {
 	PrevHash    string
-	OpHistory   []Operation
+	OpHistory   []OperationInfo
 	MinerPubKey string
-	Nonce       string
+	Nonce       uint32
 }
 
 type BlockNode struct {
 	Block    Block
-	Children []int
+	Children []int // The indices of the children in the BlockNodeArray
 }

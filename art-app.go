@@ -21,8 +21,10 @@ import (
 )
 
 func main() {
-	minerAddr := "127.0.0.1:8080"
-	privKeyString := "3081a40201010430d35b96ee7ced244b5a47de8968b07ecd38a6dd756f0ffb40a72ccd5895e96f24310c1fc544d7f8d026c55213c8fa2ef2a00706052b81040022a164036200040ef0f59ad36a9661ef93044b53e5c2ca2e7b5ce23323367a3428ebeb256716b8c2cfc63225fd88174193cbe13c3137b41719058cd0fabd5713b91bc7b314f8086fba4b29734d675fccd6a7b4a4ec6af96d499ba64d792522f4710791d214ac45"
+	minerAddr := "127.0.0.1:34492"
+
+
+	privKeyString := "3081a4020101043069f5ffffd085b51a78166f766330f4771674d8cadfd4bc3556082d59fcaa8d56a74e487e125318c0abb0c71e3852b341a00706052b81040022a164036200043bda4ebb0d9f3d2270e41ce140b889bdb94e889fb7c1b0f082c9919bbb5cde31af295da333e5f216336bface06843b0f5ef7b36d1ab0b28bbe458559b8d48df15763e2e6e955f8102aca1c5e8413a248547ece44bc1be5326debc14cb8add5ed"
 	privateKeyBytes, _ := hex.DecodeString(privKeyString)
 	privKey, _ := x509.ParseECPrivateKey(privateKeyBytes)
 	// TODO: use crypto/ecdsa to read pub/priv keys from a file argument.
@@ -36,7 +38,7 @@ func main() {
 	fmt.Println(canvas)
 	fmt.Println(settings)
 
-	validateNum := uint8(2)
+	validateNum := uint8(6)
 
 	// Add a line.
 	shapeHash, blockHash, ink, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
@@ -44,21 +46,23 @@ func main() {
 		return
 	}
 
-	fmt.Println("%s, %s, %d", shapeHash, blockHash, ink)
+	fmt.Println("added a line:", shapeHash, blockHash, ink)
 	// Add another line.
 	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "blue")
 	if checkError(err) != nil {
 		return
 	}
 
-	fmt.Println("%s, %s, %d", shapeHash2, blockHash2, ink2)
+	fmt.Println("added another line", shapeHash2, blockHash2, ink2)
+
+	fmt.Println("deleting a line!")
 	// Delete the first line.
 	ink3, err := canvas.DeleteShape(validateNum, shapeHash)
 	if checkError(err) != nil {
 		return
 	}
 
-	fmt.Println("%d", ink3)
+	fmt.Println("deleted a line", ink3)
 	// assert ink3 > ink2
 
 	// Close the canvas.
@@ -67,7 +71,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("%d", ink4)
+	fmt.Println("closed canvas", ink4)
 }
 
 // If error is non-nil, print it out and return it.

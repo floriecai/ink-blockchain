@@ -213,7 +213,7 @@ func (a PixelSubArray) Print() {
 }
 
 // Get the number of pixels filled in the sub array
-func (a PixelSubArray) GetPixelsFilled() int {
+func (a PixelSubArray) PixelsFilled() int {
 	sum := int(0)
 	for y := len(a.bytes) - 1; y >= 0; y-- {
 		for x := 0; x < len(a.bytes[0]); x++ {
