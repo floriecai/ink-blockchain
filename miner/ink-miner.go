@@ -90,6 +90,8 @@ type MinerInfo struct {
 }
 
 type LibMinerInterface struct {
+	SOpChan		chan blockchain.OperationInfo
+	POpChan		chan PropagateOpArgs
 }
 
 type MinerServerInterface struct {
@@ -128,9 +130,8 @@ func (m *Miner) ConnectToServer(ip string) {
 ********************************/
 
 // Setup an interface that implements rpc calls for the lib
-func OpenLibMinerConn(ip string) {
-	lib_miner_int := new(LibMinerInterface)
-
+func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.OperationInfo) {
+	lib_miner_int := &LibMinerInterface{sop, pop}
 	server := rpc.NewServer()
 	server.Register(lib_miner_int)
 
@@ -203,7 +204,8 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 			OpInfo: opInfo,
 			TTL:    TTL}
 
-		MinerInstance.POpChan <- propOpArgs
+		lmi.POpChan <- propOpArgs
+		lmi.SOpChan <- opInfo
 
 		// Check if it conflicts with the existing canvas
 		err := ValidateOperation(op, pubKeyString)
@@ -945,5 +947,5 @@ func main() {
 	go ProblemSolver(sop, sblock, pblock)
 
 	// 6. Setup Client-Miner Listener (this thread)
-	OpenLibMinerConn(":0")
+	OpenLibMinerConn(":0", pop, sop)
 }
