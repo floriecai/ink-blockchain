@@ -140,6 +140,7 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 
 	MinerInstance.LMI = lib_miner_int
 
+	fmt.Println("OpenLibMinerConn:: Listening on: ", tcp.Addr().String())
 	server.Accept(tcp)
 }
 
@@ -225,8 +226,6 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 				return nil
 			}
 		}
-
-		fmt.Println("drawing is currently unimplemented, sorry!")
 		return nil
 	}
 	err = fmt.Errorf("invalid user")
