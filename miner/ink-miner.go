@@ -337,7 +337,7 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 
 			// Keep looping until there are NumValidate blocks
 			currlen := oldlen
-			for currlen < oldlen + int(deleteReq.ValidateNum) {
+			for currlen < oldlen+int(deleteReq.ValidateNum) {
 				time.Sleep(10 * time.Second)
 				_, currlen = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 			}
@@ -519,7 +519,12 @@ func GetLongestPath(initBlockHash string) ([]blockchain.Block, int) {
 	defer Recover()
 	blockChain := make([]blockchain.Block, 0)
 
-	initBIndex, _ := ReadBlockChainMap(initBlockHash)
+	initBIndex, blockExists := ReadBlockChainMap(initBlockHash)
+
+	if !blockExists {
+		return blockChain, 0
+	}
+
 	blockChain = append(blockChain, BlockNodeArray[initBIndex].Block)
 
 	// For the genesis block, we can return the entire length of the continuous blockchain since it is cached in PathMap
@@ -1061,7 +1066,7 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Print("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
+			fmt.Print("<- ", block.PrevHash[0:5], ":", block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
 					fmt.Print("-ADD:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
