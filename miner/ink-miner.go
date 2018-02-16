@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -240,9 +241,9 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 		for len(blockHash) == 0 {
 			// Check if it conflicts with the existing canvas
 			err := ValidateOperation(op, pubKeyString)
-
 			if err != nil {
-				return err
+				code := CheckStatusCode(err)
+				return errors.New(code)
 			}
 
 			// Keep looping until there are NumValidate blocks
@@ -279,7 +280,8 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		// Find the ADD Operation
 		addBlockHash := GetBlockHashOfShapeHash(deleteReq.ShapeHash)
 		if addBlockHash == "" {
-			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
+			code := CheckStatusCode(libminer.ShapeOwnerError(deleteReq.ShapeHash))
+			return errors.New(code)
 		}
 
 		addBlock := GetBlock(addBlockHash)
@@ -292,7 +294,8 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 		}
 
 		if addOpInfo.Op.OpType != blockchain.ADD {
-			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
+			code := CheckStatusCode(libminer.ShapeOwnerError(deleteReq.ShapeHash))
+			return errors.New(code)
 		}
 
 		OpMutex.Lock()
@@ -332,7 +335,8 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 			err := MinerInstance.checkDeletion(opInfo.OpSig, pubKeyString, path)
 
 			if err != nil {
-				return err
+				code := CheckStatusCode(err)
+				return errors.New(code)
 			}
 
 			// Keep looping until there are NumValidate blocks
@@ -367,8 +371,8 @@ func (lmi *LibMinerInterface) GetChildren(req *libminer.Request, response *libmi
 		var blockRequest libminer.BlockRequest
 		json.Unmarshal(req.Msg, &blockRequest)
 		if _, ok := ReadBlockChainMap(blockRequest.BlockHash); !ok {
-			err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
-			return err
+			code := CheckStatusCode(libminer.InvalidBlockHashError(blockRequest.BlockHash))
+			return errors.New(code)
 		}
 		children := GetBlockChildren(blockRequest.BlockHash)
 		response.Blocks = children
@@ -389,8 +393,8 @@ func (lmi *LibMinerInterface) GetBlock(req *libminer.Request, response *libminer
 			return nil
 		}
 
-		err = libminer.InvalidBlockHashError(blockRequest.BlockHash)
-		return err
+		code := CheckStatusCode(libminer.InvalidBlockHashError(blockRequest.BlockHash))
+		return errors.New(code)
 	}
 
 	err = fmt.Errorf("invalid user")
@@ -404,7 +408,8 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 
 		blockHash := GetBlockHashOfShapeHash(opRequest.ShapeHash)
 		if blockHash == "" {
-			return libminer.InvalidShapeHashError(opRequest.ShapeHash)
+			code := CheckStatusCode(libminer.InvalidShapeHashError(opRequest.ShapeHash))
+			return errors.New(code)
 		}
 
 		blockIndex, _ := ReadBlockChainMap(blockHash)
@@ -414,7 +419,8 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 			}
 		}
 
-		return libminer.InvalidShapeHashError(opRequest.ShapeHash)
+		code := CheckStatusCode(libminer.InvalidShapeHashError(opRequest.ShapeHash))
+		return errors.New(code)
 	}
 
 	err = fmt.Errorf("invalid user")
@@ -1009,6 +1015,29 @@ func CheckError(err error, parent string) bool {
 	return false
 }
 
+func CheckStatusCode(err error) string {
+	switch err.(type) {
+	case libminer.ShapeSvgStringTooLongError:
+		return "1" + " " + err.Error()
+	case libminer.InvalidShapeSvgStringError:
+		return "2" + " " + err.Error()
+	case libminer.InsufficientInkError:
+		return "3" + " " + err.Error()
+	case libminer.ShapeOverlapError:
+		return "4" + " " + err.Error()
+	case libminer.OutOfBoundsError:
+		return "5" + " " + err.Error()
+	case libminer.InvalidBlockHashError:
+		return "6" + " " + err.Error()
+	case libminer.ShapeOwnerError:
+		return "7" + " " + err.Error()
+	case libminer.InvalidShapeHashError:
+		return "8" + " " + err.Error()
+	default:
+		return "9"
+	}
+}
+
 func ExtractKeyPairs(pubKey, privKey string) {
 	var PublicKey *ecdsa.PublicKey
 	var PrivateKey *ecdsa.PrivateKey
@@ -1069,9 +1098,9 @@ func PrintBlockChain(blocks []blockchain.Block) {
 			fmt.Print("<- ", block.PrevHash[0:5], ":", block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
-					fmt.Print("-ADD:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
+					fmt.Print("-ADD:", opinfo.Op.SVGString, "-")
 				} else {
-					fmt.Print("-DELETE:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
+					fmt.Print("-DELETE:", opinfo.Op.SVGString, "-")
 				}
 			}
 			fmt.Print(" ->\n")
