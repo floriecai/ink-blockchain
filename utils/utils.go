@@ -74,7 +74,7 @@ func (c ZCommand) IsRelative() bool { return false }
 type SVGPath []SVGCommand
 
 // Given a blockchain.OperationInfo, returns the corresponding html svg element
-// i.e. <svg d="M 0 0 H 10 10 v 20 Z" fill="transparent" stroke="red">
+// i.e. <path d="M 0 0 H 10 10 v 20 Z" fill="transparent" stroke="red">
 func GetHTMLSVGString(op blockchain.Operation) string {
 	var fill, stroke string
 	if op.OpType == blockchain.DELETE {
@@ -84,7 +84,7 @@ func GetHTMLSVGString(op blockchain.Operation) string {
 		fill = op.Fill
 		stroke = op.Stroke
 	}
-	return fmt.Sprintf("<svg d=\"%s\" fill=\"%s\" stroke=\"%s\">", op.SVGString, fill, stroke)
+	return fmt.Sprintf("<path d=\"%s\" fill=\"%s\" stroke=\"%s\">", op.SVGString, fill, stroke)
 }
 
 // Parses a string into a list of SVGCommands
