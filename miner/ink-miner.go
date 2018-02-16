@@ -165,7 +165,7 @@ func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libmin
 
 func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.InkResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
+		MinerInstance.InkAmt = CalculateInk(utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey))
 		response.InkRemaining = uint32(MinerInstance.InkAmt)
 		return nil
 	}
@@ -176,7 +176,7 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
-		MinerInstance.InkAmt = CalculateInk(pubKeyToString(MinerInstance.PrivKey.PublicKey))
+		MinerInstance.InkAmt = CalculateInk(utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey))
 		var drawReq libminer.DrawRequest
 		json.Unmarshal(req.Msg, &drawReq)
 		pubKeyString := utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)
@@ -779,7 +779,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 	CurrJobId++
 	block := blockchain.Block{PrevHash: hash,
-		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
+		MinerPubKey: utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
 		CurrJobId++
@@ -795,7 +795,7 @@ func OpJob(hash string, Ops []blockchain.OperationInfo, solved chan blockchain.B
 	CurrJobId++
 	block := blockchain.Block{PrevHash: hash,
 		OpHistory:   Ops,
-		MinerPubKey: pubKeyToString(MinerInstance.PrivKey.PublicKey)}
+		MinerPubKey: utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
 	for i := 0; i <= MAX_THREADS; i++ {
 		CurrJobId++
@@ -883,9 +883,9 @@ func GetBlockHashOfShapeHash(opSig string) string {
 
 func PrintBlockChain(blocks []blockchain.Block){
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
-	for _, block := range blocks {
-		fmt.Print("<- ", block.PrevHash, ":",block.Nonce, "->")
-	}
+	//for _, block := range blocks {
+		//fmt.Print("<- ", block.PrevHash, ":",block.Nonce, ":", block.MinerPubKey, "->")
+	//}
 	fmt.Print("\n")
 }
 

@@ -97,7 +97,10 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 	// of this pubkey.
 	for i := 0; i < len(blocks); i++ {
 		block := blocks[i]
-
+		fmt.Println("comparing pub keys:")
+		fmt.Println(block.MinerPubKey)
+		fmt.Println("vs")
+		fmt.Println(pubkey)
 		numOps := len(block.OpHistory)
 		if block.MinerPubKey == pubkey {
 			if numOps > 0 {
@@ -141,7 +144,7 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 	}
 
 	if inkRequired > int(pubkeyInk) {
-		fmt.Println("checkInkAndConflicts: insufficient ink")
+		fmt.Println("checkInkAndConflicts: insufficient ink:", inkRequired, " needed vs ", pubkeyInk)
 		return libminer.InsufficientInkError(uint32(inkRequired))
 	}
 
