@@ -44,7 +44,7 @@ const (
 	// Global TTL of propagate requests
 	TTL = 2
 	// Maximum threads we will use for problem solving
-	MAX_THREADS = 4
+	MAX_THREADS = 1
 )
 
 // Global blockchain Parent->Children Map
