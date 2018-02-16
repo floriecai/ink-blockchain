@@ -894,9 +894,10 @@ func PrintBlockChain(blocks []blockchain.Block){
 }
 
 func Recover() {
+
     // recover from panic caused by writing to a closed channel
     if r := recover(); r != nil {
-		//fmt.Println("recovered from GetLongestPath")
+		fmt.Println("recovered from GetLongestPath")
 		blockhash, _ := json.Marshal(BlockHashMap)
 		blockarray, _ := json.Marshal(BlockNodeArray)
 		ioutil.WriteFile("./output/blockhashmap.txt", blockhash, 0644)
