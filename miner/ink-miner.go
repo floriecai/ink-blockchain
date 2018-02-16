@@ -206,6 +206,7 @@ func (lmi *LibMinerInterface) GetInk(req *libminer.Request, response *libminer.I
 	return err
 }
 
+
 func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.DrawResponse) (err error) {
 	if Verify(req.Msg, req.HashedMsg, req.R, req.S, MinerInstance.PrivKey) {
 		MinerInstance.InkAmt = CalculateInk(utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey))
@@ -871,11 +872,18 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs,
 	// Send heartbeats at three times the timeout interval to be safe
 	interval := time.Duration(MinerInstance.Settings.HeartBeat / 5)
 	heartbeat := time.Tick(interval * time.Millisecond)
+	count := 0
 	for {
 		select {
 		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
-			PeerHeartBeats()
+			if count == 50{
+				PeerSync()
+				count = 0
+			} else {
+				count++
+				PeerHeartBeats()
+			}
 		case addr := <-peerconn:
 			// Connection request from peerRpc
 			addrSet := []net.Addr{addr}
@@ -892,6 +900,22 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs,
 				var addrSet []net.Addr
 				MinerInstance.MSI.Client.Call("RServer.GetNodes", MinerInstance.PrivKey.PublicKey, &addrSet)
 				MinerInstance.MSI.GetPeers(addrSet)
+			}
+		}
+	}
+}
+
+// Try to sync up with peers once in a while
+func PeerSync() {
+	fmt.Println("Performing a sync")
+	for addr, peer := range PeerList {
+		var blockchainResp []blockchain.Block
+		empty := new(Empty)
+		err := peer.Client.Call("Peer.GetBlockChain", empty, &blockchainResp)
+		if !CheckError(err, "PeerSync:"+addr) {
+			peer.LastHeartBeat = time.Now()
+			for _, block := range blockchainResp {
+				InsertBlock(block)
 			}
 		}
 	}
@@ -1006,14 +1030,16 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			// Assume this was block was validated
 			// Assume this block has already been inserted
 			chain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			workingSet = ValidateOps(workingSet, chain)
 			if len(workingSet) == 0 {
 				done = NoopJob(GetBlockHash(block), solved)
 			} else {
-				workingSet = ValidateOps(workingSet, chain)
 				done = OpJob(GetBlockHash(block), workingSet, solved)
 			}
 		case sol := <-solved:
-			fmt.Println("got a solution", sol.Nonce)
+			if len(sol.OpHistory) > 0 {
+				fmt.Println("got a solution", sol.OpHistory[0])
+			}
 
 			// Kill current job
 			close(done)
@@ -1038,7 +1064,6 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 				fmt.Println("Initiating the first job")
 				done = NoopJob(MinerInstance.Settings.GenesisBlockHash, solved)
 			}
-			// Wait for current job to change
 		}
 	}
 }
@@ -1046,6 +1071,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 // Initiate a job with an empty op array and a blockhash
 func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 	CurrJobId++
+	fmt.Println("Starting job:", CurrJobId)
 	block := blockchain.Block{PrevHash: hash,
 		MinerPubKey: utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)}
 	done := make(chan bool)
@@ -1061,6 +1087,7 @@ func NoopJob(hash string, solved chan blockchain.Block) chan bool {
 // Initiate a job with a predefined op array
 func OpJob(hash string, Ops []blockchain.OperationInfo, solved chan blockchain.Block) chan bool {
 	CurrJobId++
+	fmt.Println("Starting job:", CurrJobId)
 	block := blockchain.Block{PrevHash: hash,
 		OpHistory:   Ops,
 		MinerPubKey: utils.GetPublicKeyString(MinerInstance.PrivKey.PublicKey)}
@@ -1176,12 +1203,12 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Print("<- ", block.PrevHash, ":", block.Nonce, ":", block.MinerPubKey, ":")
+			fmt.Print("<- ", block.PrevHash[0:5], ":", block.Nonce, ":", block.MinerPubKey[10:15], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
-					fmt.Print("-ADD:", opinfo.Op.SVGString, "-")
+					fmt.Print("-ADD:", opinfo.Op.SVGString, ":", opinfo.OpSig,"-")
 				} else {
-					fmt.Print("-DELETE:", opinfo.Op.SVGString, "-")
+					fmt.Print("-DELETE:", opinfo.Op.SVGString, ":", opinfo.OpSig,"-")
 				}
 			}
 			fmt.Print(" ->\n")
