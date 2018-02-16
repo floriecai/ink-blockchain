@@ -862,6 +862,7 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs,
 				PeerSync()
 				count = 0
 			} else {
+				count++
 				PeerHeartBeats()
 			}
 		case addr := <-peerconn:
@@ -1183,7 +1184,7 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Print("<- ", /*block.PrevHash, ":", block.Nonce, ":", block.MinerPubKey,*/ ":")
+			fmt.Print("<- ", block.PrevHash[0:5], ":", block.Nonce, ":", block.MinerPubKey[10:15], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
 					fmt.Print("-ADD:", opinfo.Op.SVGString, ":", opinfo.OpSig,"-")
