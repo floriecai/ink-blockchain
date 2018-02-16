@@ -80,8 +80,8 @@ func ValidateOperation(op blockchain.Operation, pubKey string, opSig string) err
 
 	subarr, inkRequired := shape.SubArrayAndCost()
 
-//	validateLock.Lock()
-//	defer validateLock.Unlock()
+	validateLock.Lock()
+	defer validateLock.Unlock()
 
 	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
 	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString, opSig)

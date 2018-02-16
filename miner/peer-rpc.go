@@ -18,9 +18,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/rpc"
-
 	"sync"
 
 	"../blockchain"
@@ -154,10 +154,10 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 
 	subarr, inkRequired := shape.SubArrayAndCost()
 
-//	validateLock.Lock()
-//	log.Println("Got ValidateLock in Pop")
-//	defer log.Println("Release ValidateLock in Pop")
-//	defer validateLock.Unlock()
+	validateLock.Lock()
+	log.Println("Got ValidateLock in Pop")
+	defer log.Println("Release ValidateLock in Pop")
+	defer validateLock.Unlock()
 
 	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 	if args.OpInfo.Op.OpType == blockchain.ADD {
@@ -203,8 +203,8 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 		msgLock.Unlock()
 	}
 
-//	validateLock.Lock()
-//	defer validateLock.Unlock()
+	validateLock.Lock()
+	defer validateLock.Unlock()
 
 	// Find the path that the block should be on, no guarantee it is the longest
 	path := GetPath(args.Block.PrevHash)
