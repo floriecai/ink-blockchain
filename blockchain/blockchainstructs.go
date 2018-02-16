@@ -13,7 +13,7 @@ type ShapeHash struct {
 
 type Operation struct {
 	OpType    OpType
-	SVGString string // svgString passed in by the operation
+	SVGString string // svg "path" that was passed in e.g. M 0 0 H 10 V 20 Z
 	Fill      string
 	Stroke    string
 	OpNum     uint64 // Unique id for operations
@@ -34,5 +34,5 @@ type Block struct {
 
 type BlockNode struct {
 	Block    Block
-	Children []int
+	Children []int // The indices of the children in the BlockNodeArray
 }

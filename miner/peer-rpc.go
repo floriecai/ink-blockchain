@@ -71,18 +71,25 @@ type GetBlockChainArgs struct {
 // requesting connect will be added to the maintained peer count. There will
 // be a heartbeat procedure for it, and any data propagations will be sent to
 // the peer as well.
-func (p PeerRpc) Connect(args ConnectArgs, reply *Empty) error {
+func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 
 	// - Send through request channel to Connection Manager to connect next time
 	p.reqCh <- args.Addr
+	blockchain := make([]blockchain.Block, 0)
+	for i, node :=  range BlockNodeArray {
+		if i != 0 {
+			blockchain = append(blockchain, node.Block)
+		}
+	}
+	*reply = blockchain
 	fmt.Println("Connect called by: ", args.Addr.String())
 
 	return nil
 }
 
 // This RPC is a no-op. It's used by the peer to ensure that this miner is still alive.
-func (p PeerRpc) Hb(args *Empty, reply *Empty) error {
-	fmt.Println("Hb called")
+func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
+	//fmt.Println("Hb called")
 	return nil
 }
 
@@ -91,20 +98,24 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGString)
 	if err == nil {
 		// Error is nil, should be parsable into shapelib.Path
-		return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
-			int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
+		return utils.SVGToPoints(pathlist,
+			int(m.Settings.CanvasSettings.CanvasXMax),
+			int(m.Settings.CanvasSettings.CanvasXMax),
+			op.Fill != "transparent",
+			op.Stroke != "transparent")
 	}
 
-	// TODO: try parsing it as a circle
-	//circ, err := utils.GetParsedCirc(op.SVGOp)
-	//if err != nil {
-	//	fmt.Println("SVG string is neither circle nor path:", op.SVGOp)
-	//	return shapelib.Shape(shapelib.Circle{0, 0, 0, false}), err
-	//}
+	// Try parsing it as a circle
+	circ, err := utils.GetParsedCirc(op,
+		int(m.Settings.CanvasSettings.CanvasXMax),
+		int(m.Settings.CanvasSettings.CanvasXMax))
+	if err != nil {
+		fmt.Println("SVG string is neither circle nor path:", op.SVGString)
+		return circ, err
+	}
 
 	// FIXME: change for circle
-	circ := shapelib.NewCircle(0, 0, 0, false)
-	return circ, fmt.Errorf("Not a path or circle")
+	return circ, nil
 }
 
 // Get a shapelib.Path from an operation
@@ -112,13 +123,14 @@ func (m Miner) getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	pathlist, err := utils.GetParsedSVG(op.SVGString)
 	if err != nil {
 		fmt.Println("PropagateOp err:", err)
-		path := shapelib.NewPath(nil, false)
+		path := shapelib.NewPath(nil, false, false)
 		return path, err
 	}
 
 	// Get the shapelib.Path representation for this svg path
 	return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
-		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent")
+		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent",
+			op.Stroke != "transparent")
 }
 
 // This lock is intended to be used so that only one op or block will be in the
@@ -128,7 +140,7 @@ var validateLock sync.Mutex
 
 // This RPC is used to send an operation (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
+func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	fmt.Println("PropagateOp called")
 
 	// TODO: Validate the shapehash using the public key
@@ -146,7 +158,7 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 
 	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 	if args.OpInfo.Op.OpType == blockchain.ADD {
-		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks)
+		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString)
 	} else {
 		err = p.miner.checkDeletion(args.OpInfo.OpSig, args.OpInfo.PubKey, blocks)
 	}
@@ -170,24 +182,42 @@ func (p PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
-func (p PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
-	fmt.Println("PropagateBlock called")
-
-	// - Validate the block
-	// - Add block to block chain.
+func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
+	//fmt.Println("PropagateBlock called")
 
 	validateLock.Lock()
 	defer validateLock.Unlock()
 
-	// Propagate block to list of connected peers.
+	// Find the path that the block should be on, no guarantee it is the longest
+	path, err := GetPath(args.Block.PrevHash, BlockHashMap, BlockNodeArray)
+	if CheckError(err, "PropagateBlock:GetPath"){
+		return nil
+	}
 
-	// Update the solver. There will likely need to be additional logic somewhere here.
-	p.blkSCh <- args.Block
+	// Validate the block, if the block is not valid just drop it
+	if p.miner.ValidateBlock(args.Block, path) {
+		// Propagate block to list of connected peers.
+		args.TTL--
+		if args.TTL > 0 {
+			//fmt.Println("Propgation:", args.TTL)
+			p.blkCh <- args
+		}
 
-	// Propagate block to list of connected peers.
-	args.TTL--
-	if args.TTL > 0 {
-		p.blkCh <- args
+		// Snapshot the current longest path
+		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		lastblock := longest[length-1]
+
+		// - Add block to block chain.
+		InsertBlock(args.Block)
+
+		// Check if the longest path changed
+		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		newlastblock := newlongest[newlength-1]
+
+		// If the longest path changed we should build off of it so send it to problem solver
+		if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
+			p.blkSCh <- args.Block
+		}
 	}
 
 	return nil
@@ -212,7 +242,7 @@ func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
 	server := rpc.NewServer()
-	server.RegisterName("Peer", pRpc)
+	server.RegisterName("Peer", &pRpc)
 
 	server.Accept(ln)
 }

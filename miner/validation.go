@@ -3,10 +3,6 @@
 Purpose of this file is to contain the validation functions needed for the add
 and delete operations for shapes in the blockchain.
 
-Need to figure out exactly what to check. There could be multiple longest paths.
-It could be that there is a conflict on one and not the other. Need to think
-carefully about this when calling the functions in this file.
-
 */
 
 package main
@@ -15,23 +11,75 @@ import (
 	"fmt"
 
 	"../blockchain"
+	"../libminer"
 	"../shapelib"
 )
 
 const LOG_VALIDATION = true
 
+
+func (m Miner) ValidateBlock(block blockchain.Block, chain []blockchain.Block) bool {
+	//fmt.Println("ValidateBlock::TODO: Unfinished")
+
+	testblock := new(blockchain.Block)
+	testblock.MinerPubKey = block.MinerPubKey
+	// check that the block hashes correctly
+	// this is checked a lot though, do we need this? TODO
+	if VerifyBlock(block){
+		for _, opinfo := range block.OpHistory {
+			testchain := append(chain, *testblock)
+			op := opinfo.Op
+			shape, err := MinerInstance.getShapeFromOp(op)
+			if err != nil {
+				return false
+			}
+
+			subarr, inkRequired := shape.SubArrayAndCost()
+
+			err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, block.MinerPubKey, testchain, op.SVGString)
+			if err != nil {
+				return false
+			}
+
+			testblock.OpHistory = append(testblock.OpHistory, opinfo)
+		}
+		return true
+	}
+
+	return false
+}
+
+// Checks if there are overlaps and enough ink
+func ValidateOperation(op blockchain.Operation, pubKey string) error {
+	shape, err := MinerInstance.getShapeFromOp(op)
+	if err != nil {
+		return err
+	}
+
+	subarr, inkRequired := shape.SubArrayAndCost()
+
+	validateLock.Lock()
+	defer validateLock.Unlock()
+
+	blocks, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	err = MinerInstance.checkInkAndConflicts(subarr, inkRequired, pubKey, blocks, op.SVGString)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Function used to determine if an add operation is allowed on the blockchain.
 func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired int,
-	pubkey string, blocks []blockchain.Block) error {
+	pubkey string, blocks []blockchain.Block, svgString string) error {
 	if LOG_VALIDATION {
 		fmt.Println("checkInkAndConflicts called")
 	}
 
-	// Pixel array for checking shape conflicts
-	pixelarr := shapelib.NewPixelArray(int(m.Settings.CanvasSettings.CanvasXMax),
-		int(m.Settings.CanvasSettings.CanvasYMax))
-
 	pubkeyInk := uint32(0)
+	shapesExisting := make(map[string]*blockchain.OperationInfo)
 
 	// Iterate over all blocks in this structure to form the pixel array
 	// formed by all shapes not from this pubkey, and the ink remaining
@@ -51,17 +99,16 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 		for j := 0; j < numOps; j++ {
 			opInfo := block.OpHistory[j]
 			op := opInfo.Op
-			path, err := m.getShapeFromOp(op)
-			if err != nil {
-				fmt.Println("CRITICAL ERROR, BAD OP IN BLOCKCHAIN")
-				continue
-			}
 
-			subarr, cost := path.SubArrayAndCost()
+			if opInfo.PubKey == pubkey {
+				shape, err := m.getShapeFromOp(op)
+				if err != nil {
+					fmt.Println("CRITICAL ERROR: BAD SHAPE IN BLOCKCHAIN")
+					continue
+				}
 
-			if opInfo.PubKey != pubkey {
-				pixelarr.MergeSubArray(subarr)
-			} else {
+				_, cost := shape.SubArrayAndCost()
+
 				// Don't fill in the pixels for the same pubkey,
 				// but compute the ink required in order to
 				// check if pubkey has sufficient ink.
@@ -72,22 +119,38 @@ func (m Miner) checkInkAndConflicts(subarr shapelib.PixelSubArray, inkRequired i
 				} else {
 					pubkeyInk += uint32(cost)
 				}
+			} else {
+				if op.OpType == blockchain.ADD {
+					shapesExisting[opInfo.OpSig] = &opInfo
+				} else {
+					delete(shapesExisting, opInfo.OpSig)
+				}
 			}
 		}
 	}
 
-	// TODO: check ink of the public key for any operations currently in
-	// progress; a pubkey may have more than one op in progress of being
-	// put into the blockchain at a given time.
-
 	if inkRequired > int(pubkeyInk) {
 		fmt.Println("checkInkAndConflicts: insufficient ink")
-		return fmt.Errorf("insufficient ink")
+		return libminer.InsufficientInkError(uint32(inkRequired))
+	}
+
+	pixelarr := shapelib.NewPixelArray(int(m.Settings.CanvasSettings.CanvasXMax),
+		int(m.Settings.CanvasSettings.CanvasYMax))
+
+	// Merge all shapes existing into the pixel array for validating conflicts
+	for _, v := range shapesExisting {
+		shape, err := m.getShapeFromOp(v.Op)
+		if err != nil {
+			fmt.Println("CRITICAL ERROR: BAD SHAPE IN BLOCKCHAIN")
+		}
+
+		subarr, _ := shape.SubArrayAndCost()
+		pixelarr.MergeSubArray(subarr)
 	}
 
 	if pixelarr.HasConflict(subarr) {
 		fmt.Println("checkInkAndConflicts: conflict found")
-		return fmt.Errorf("conflict found")
+		return libminer.ShapeOverlapError(svgString)
 	}
 
 	return nil
@@ -125,7 +188,7 @@ func (m Miner) checkDeletion(sHash string, pubkey string, blocks []blockchain.Bl
 breakOuterLoop:
 
 	if !delAllowed {
-		return fmt.Errorf("Delete operation not allowed")
+		return libminer.ShapeOwnerError(sHash)
 	}
 
 	return nil
