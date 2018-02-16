@@ -320,24 +320,33 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 
 		MinerInstance.POpChan <- propOpArgs
 
-		// Check if DELETE is valid
-		blockChain, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
-		err = MinerInstance.checkDeletion(deleteReq.ShapeHash, pubKeyString, blockChain)
+		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+		lmi.POpChan <- propOpArgs
+		lmi.SOpChan <- opInfo
 
-		if err != nil {
-			return libminer.ShapeOwnerError(deleteReq.ShapeHash)
-		}
+		blockHash := ""
+		// keep trying to validate the operation
+		for len(blockHash) == 0 {
+			// Check if it conflicts with the existing canvas
+			path, _ := GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			err := MinerInstance.checkDeletion(opInfo.OpSig, pubKeyString, path)
 
-		// Keep looping until there are at least NumValidate blocks that follow
-		for {
-			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
-			_, numBlocksFollowing := GetLongestPath(blockHash)
-
-			if numBlocksFollowing > -int(deleteReq.ValidateNum) {
-				response.InkRemaining = uint32(CalculateInk(pubKeyString))
-				return nil
+			if err != nil {
+				return err
 			}
+
+			// Keep looping until there are NumValidate blocks
+			currlen := oldlen
+			for currlen < oldlen + int(deleteReq.ValidateNum) {
+				time.Sleep(10 * time.Second)
+				_, currlen = GetLongestPath(MinerInstance.Settings.GenesisBlockHash)
+			}
+
+			blockHash = GetBlockHashOfShapeHash(opInfo.OpSig)
 		}
+
+		response.InkRemaining = uint32(CalculateInk(pubKeyString))
+		return nil
 	}
 
 	err = fmt.Errorf("invalid user")
@@ -1052,7 +1061,15 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
-			fmt.Println("<- ", block.PrevHash[0:5], ":", block.Nonce, ":", block.MinerPubKey[0:5], ":", len(block.OpHistory), " ->")
+			fmt.Print("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
+			for _, opinfo := range block.OpHistory {
+				if opinfo.Op.OpType == blockchain.ADD {
+					fmt.Print("-ADD:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
+				} else {
+					fmt.Print("-DELETE:", opinfo.OpSig[len(opinfo.OpSig)-5], "-")
+				}
+			}
+			fmt.Print(" ->\n")
 		} else {
 			fmt.Println("<- ", MinerInstance.Settings.GenesisBlockHash, " ->")
 		}
