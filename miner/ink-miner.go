@@ -917,6 +917,7 @@ func PrintBlockChain(blocks []blockchain.Block){
 }
 
 func Recover() {
+
     // recover from panic caused by writing to a closed channel
     if r := recover(); r != nil {
 		fmt.Println("recovered from GetLongestPath")

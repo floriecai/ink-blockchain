@@ -40,6 +40,7 @@ type PeerRpc struct {
 	opSCh  chan blockchain.OperationInfo
 	blkSCh chan blockchain.Block
 	reqCh  chan net.Addr
+	blks   map[string]Empty
 }
 
 // Empty struct. Use for filling required but unused function parameters.
@@ -183,6 +184,13 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 // Will not return any useful information.
 func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	//fmt.Println("PropagateBlock called")
+	blkHash := GetBlockHash(args.Block)
+	if _, exists := p.blks[blkHash]; exists {
+		//fmt.Println("Ignoring already received blockhash")
+		return nil
+	} else {
+		p.blks[blkHash] = Empty{}
+	}
 
 	validateLock.Lock()
 	defer validateLock.Unlock()
@@ -195,8 +203,8 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 	// Validate the block, if the block is not valid just drop it
 	if p.miner.ValidateBlock(args.Block, path) {
-		// Propagate block to list of connected peers.
-		args.TTL--
+		// Propagate block to list of connected peers. Too lazy to get rid of TTL;
+		// it's not used any more for PropgateBlock though.
 		if args.TTL > 0 {
 			//fmt.Println("Propgation:", args.TTL)
 			p.blkCh <- args
@@ -242,7 +250,7 @@ func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 	blkCh chan PropagateBlockArgs, opSCh chan blockchain.OperationInfo,
 	blkSCh chan blockchain.Block, reqCh chan net.Addr) {
-	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh}
+	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh, make(map[string]Empty)}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
