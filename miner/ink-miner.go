@@ -205,27 +205,33 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 			OpInfo: opInfo,
 			TTL:    TTL}
 
+		_, oldlen := GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
 		lmi.POpChan <- propOpArgs
 		lmi.SOpChan <- opInfo
 
-		// Check if it conflicts with the existing canvas
-		err := ValidateOperation(op, pubKeyString)
+		blockHash := ""
+		// keep trying to validate the operation
+		for len(blockHash) == 0 {
+			// Check if it conflicts with the existing canvas
+			err := ValidateOperation(op, pubKeyString)
 
-		if err != nil {
-			return err
-		}
-
-		// Keep looping until there are NumValidate blocks
-		for {
-			blockHash := GetBlockHashOfShapeHash(opInfo.OpSig)
-			_, numBlocksFollowing := GetLongestPath(blockHash, BlockHashMap, BlockNodeArray)
-			if numBlocksFollowing >= int(drawReq.ValidateNum) {
-				response.InkRemaining = uint32(CalculateInk(pubKeyString))
-				response.ShapeHash = opInfo.OpSig
-				response.BlockHash = blockHash
-				return nil
+			if err != nil {
+				return err
 			}
+
+			// Keep looping until there are NumValidate blocks
+			currlen := oldlen
+			for currlen < oldlen + int(drawReq.ValidateNum) {
+				time.Sleep(10 * time.Second)
+				_, currlen = GetLongestPath(MinerInstance.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+			}
+
+			blockHash = GetBlockHashOfShapeHash(opInfo.OpSig)
 		}
+
+		response.InkRemaining = uint32(CalculateInk(pubKeyString))
+		response.ShapeHash = opInfo.OpSig
+		response.BlockHash = blockHash
 		return nil
 	}
 	err = fmt.Errorf("invalid user")

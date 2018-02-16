@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	minerAddr := "127.0.0.1:50417"
+	minerAddr := "127.0.0.1:52042"
 
 	privKeyString := "3081a402010104306c9de9cce82755eca357beed8f1c9e9df8594ce575127fe10486cbb6bb87d3d5e3a0e2fb4d6fab7fcbce5a564f313bf2a00706052b81040022a164036200043bdd1a0e32123cf670d74ee918ef4c42a334190dfafcf93ca66955561ff85d49727076dd57705b9f904961292b352fda712c1b546ea3362c3fa63e147add351321c17189ad8b3ada63b0979905b67ca57726193ff939af38ef3aa407424ac55f"
 	privateKeyBytes, _ := hex.DecodeString(privKeyString)
@@ -45,21 +45,21 @@ func main() {
 		return
 	}
 
-	fmt.Println("%s, %s, %d", shapeHash, blockHash, ink)
+	fmt.Println("added a line:", shapeHash, blockHash, ink)
 	// Add another line.
 	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "blue")
 	if checkError(err) != nil {
 		return
 	}
 
-	fmt.Println("%s, %s, %d", shapeHash2, blockHash2, ink2)
+	fmt.Println("added another line", shapeHash2, blockHash2, ink2)
 	// Delete the first line.
 	ink3, err := canvas.DeleteShape(validateNum, shapeHash)
 	if checkError(err) != nil {
 		return
 	}
 
-	fmt.Println("%d", ink3)
+	fmt.Println("deleted a line", ink3)
 	// assert ink3 > ink2
 
 	// Close the canvas.
@@ -68,7 +68,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("%d", ink4)
+	fmt.Println("closed canvas", ink4)
 }
 
 // If error is non-nil, print it out and return it.
