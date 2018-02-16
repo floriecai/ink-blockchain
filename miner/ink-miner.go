@@ -702,7 +702,7 @@ func ProblemSolver(sop chan blockchain.OperationInfo, sblock chan blockchain.Blo
 			// Assuming it is properly validated
 			// Add it to the block we were working on
 			// reissue job
-			fmt.Println("got new op to hash:", op)
+			fmt.Println("got new op to hash")
 			// Kill current job
 			close(done)
 			close(solved)
@@ -883,16 +883,15 @@ func GetBlockHashOfShapeHash(opSig string) string {
 
 func PrintBlockChain(blocks []blockchain.Block){
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
-	//for _, block := range blocks {
-		//fmt.Print("<- ", block.PrevHash, ":",block.Nonce, ":", block.MinerPubKey, "->")
-	//}
-	fmt.Print("\n")
+	for _, block := range blocks {
+		fmt.Print("<- ", block.PrevHash[0:5], ":",block.Nonce, ":", block.MinerPubKey[0:5], ":", len(block.OpHistory)," ->")
+	fmt.Println("Length of the blockchain: ", len(blocks))
 }
 
 func Recover() {
     // recover from panic caused by writing to a closed channel
     if r := recover(); r != nil {
-		fmt.Println("recovered from GetLongestPath")
+		//fmt.Println("recovered from GetLongestPath")
 		blockhash, _ := json.Marshal(BlockHashMap)
 		blockarray, _ := json.Marshal(BlockNodeArray)
 		ioutil.WriteFile("./output/blockhashmap.txt", blockhash, 0644)
