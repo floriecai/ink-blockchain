@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/big"
 	"net"
@@ -18,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"io/ioutil"
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
@@ -138,15 +138,18 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 	tcp, err := net.Listen("tcp", ip)
 	CheckError(err, "OpenLibMinerConn:Listen")
 
+	fmt.Println("Start writing ip:port to file")
+	f, err := os.Create("./ip-ports.txt")
+	_ = CheckError(err, "OpenLibMinerConn:os.Create")
+	f.Write([]byte(tcp.Addr().String()))
+	f.Write([]byte("\n"))
+	f.Close()
+	fmt.Println("Finished writing to file")
+
 	MinerInstance.LMI = lib_miner_int
 
 	fmt.Println("OpenLibMinerConn:: Listening on: ", tcp.Addr().String())
 	server.Accept(tcp)
-
-	f, _ := os.Create("../ip-ports")
-	f.Write([]byte(tcp.Addr().String()))
-	f.Write([]byte("\n"))
-	f.Close()
 }
 
 func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error) {
@@ -912,7 +915,15 @@ func Recover() {
 func main() {
 	gob.Register(&net.TCPAddr{})
 	gob.Register(&elliptic.CurveParams{})
-	serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
+	// serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
+	serverIP := os.Args[1]
+
+	// Grab pubKey and privKey from key-pairs.txt
+	keyBytes, err := ioutil.ReadFile("./key-pairs.txt")
+	_ = CheckError(err, "main:ioutil.ReadFile")
+	keyString := string(keyBytes[:])
+	privKey := strings.Split(keyString, "\n")[0]
+	pubKey := strings.Split(keyString, "\n")[1]
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)

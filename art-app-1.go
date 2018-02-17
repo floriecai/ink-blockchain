@@ -17,29 +17,28 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"strings"
 )
 
 func main() {
-	// Open files to read from
-	ipPort, err := os.Open("./ip-ports")
+	// Read file content and cast to string
+	ipPortBytes, err := ioutil.ReadFile("./ip-ports.txt")
 	checkError(err)
-	keyPairs, err := os.Open("./key-pairs")
+	ipPortString := string(ipPortBytes[:])
+
+	keyPairsBytes, err := ioutil.ReadFile("./key-pairs.txt")
 	checkError(err)
+	keyPairsString := string(keyPairsBytes[:])
 
-	// Read ip-port and privKey from files
-	ipScanner := bufio.NewScanner(ipPort)
-	keyScanner := bufio.NewScanner(keyPairs)
-
-	minerAddr := ipScanner.ReadBytes([]byte("\n"))
-	privKeyBytes := keyScanner.ReadBytes([]byte("\n"))
-	privKey, _ := x509.ParseECPrivateKey(privateKeyBytes)
-
-	// Once finished, delete files
-	ipPort.Close()
-	keyPairs.Close()
-	_ := os.Remove("./ip-ports")
-	_ := os.Remove("./key-pairs")
+	// Parse ip-port and privKey from content string
+	minerAddr := strings.Split(ipPortString, "\n")[0]
+	privKeyString := strings.Split(keyPairsString, "\n")[0]
+	privKeyBytes, err := hex.DecodeString(privKeyString)
+	checkError(err)
+	privKey, err := x509.ParseECPrivateKey(privKeyBytes)
+	checkError(err)
 
 	// Open a canvas.
 	canvas, settings, err := blockartlib.OpenCanvas(minerAddr, *privKey)
@@ -52,94 +51,107 @@ func main() {
 
 	// First corner: (0,0)
 	// Draw horizontal lines
-	shapeHash1, blockHash1, ink1, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "red")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "red")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash1, blockHash1, ink1)
 
-	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 0", "transparent", "red")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 0", "transparent", "red")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash2, blockHash2, ink2)
 
 	// Draw vertical lines
-	shapeHash3, blockHash3, ink3, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash3, blockHash3, ink3)
 
-	shapeHash4, blockHash4, ink4, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 0 5", "transparent", "red")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 0 5", "transparent", "red")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash3, blockHash3, ink3)
 
 	// Second corner: (CanvasXMax,CanvasYMax)
 	// Draw horizontal lines
 	svg1 := fmt.Sprintf("M %d %d L -5 0", settings.CanvasXMax, settings.CanvasYMax)
-	shapeHash5, blockHash5, ink5, err := canvas.AddShape(validateNum, blockartlib.PATH, svg1, "transparent", "blue")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg1, "transparent", "blue")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash5, blockHash5, ink5)
-
 
 	svg2 := fmt.Sprintf("M %d %d L -5 0", settings.CanvasXMax, settings.CanvasYMax - 5)
-	shapeHash6, blockHash6, ink6, err := canvas.AddShape(validateNum, blockartlib.PATH, svg2, "transparent", "blue")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg2, "transparent", "blue")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash6, blockHash6, ink6)
 
 	// Draw vertical lines
 	svg3 := fmt.Sprintf("M %d %d L -5 0", settings.CanvasXMax, settings.CanvasYMax)
-	shapeHash7, blockHash7, ink7, err := canvas.AddShape(validateNum, blockartlib.PATH, svg3, "transparent", "blue")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg3, "transparent", "blue")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash7, blockHash7, ink7)
 
 	svg4 := fmt.Sprintf("M %d %d L -5 0", settings.CanvasXMax, settings.CanvasYMax - 5)
-	shapeHash8, blockHash8, ink8, err := canvas.AddShape(validateNum, blockartlib.PATH, svg4, "transparent", "blue")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg4, "transparent", "blue")
 	checkError(err)
-	fmt.Println("%s, %s, %d", shapeHash8, blockHash8, ink8)
 
 	// Jan's SVG
 	svg5 := "M 850 850 L850 50 50 50 50 850 850 850 M 750 750 150 750 150 150 750 150 750 750"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg5, "darkgrey", "darkgrey")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg5, "darkgrey", "darkgrey")
+	checkError(err)
 	svg6 := "M 885 885 L885 15 15 15 15 885 885 885 M 860 860 40 860 40 40 860 40 860 860"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg6, "#232323", "darkgrey")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg6, "#232323", "darkgrey")
+	checkError(err)
 	svg7 := "M 550 674 L700 449 550 224 350 224 200 449 350 674 550 674 M540 654 L678 449 540 244 360 244 222 449 360 654 540 654"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg7, "#666666", "darkgrey")
-	svg8 := "circle x:449 y:449 r:175"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg8, "transparent", "black")
-	svg9 := "circle x:449 y:449 r:170"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg9, "transparent", "black")
-	svg10 := "circle x:449 y:449 r:165"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg10, "transparent", "black")
-	svg11 := "circle x:449 y:449 r:55"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg11, "transparent", "black")
-	svg12 := "circle x:449 y:449 r:50"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg12, "#555555", "black")
-	svg13 := "circle x:519 y:519 r:25"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg13, "#999999", "#999999")
-	svg14 := "circle x:519 y:379 r:25"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg14, "#999999", "#999999")
-	svg15 := "circle x:379 y:519 r:25"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg15, "#999999", "#999999")
-	svg16 := "circle x:379 y:379 r:25"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.CIRCLE, svg16, "#999999", "#999999")
-	svg17 := "M725 725 L725 650 650 725 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg17, "#222222", "#222222")
-	svg18 := "M175 725 L175 650 250 725 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg18, "#222222", "#222222")
-	svg19 := "M175 175 L175 250 250 175 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg19, "#222222", "#222222")
-	svg20 := "M725 175 L650 175 725 250 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg20, "#222222", "#222222")
-	svg21 := "M449 600 L439 540 449 520 459 540 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg21, "#222222", "#222222")
-	svg22 := "M449 300 L439 360 449 380 459 360 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg22, "#222222", "#222222")
-	svg23 := "M300 449 L360 439 380 449 360 459 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg23, "#222222", "#222222")
-	svg24 := "M600 449 L540 439 520 449 540 459 Z"
-	_, _, _, err := canvas.AddShape(validateNum, blockartlib.PATH, svg24, "#222222", "#222222")
-
-	// Close the canvas.
-	ink4, err := canvas.CloseCanvas()
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg7, "#666666", "darkgrey")
 	checkError(err)
 
-	fmt.Println("%d", ink4)
+	svg8 := "circle x:449 y:449 r:175"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg8, "transparent", "black")
+	checkError(err)
+	svg9 := "circle x:449 y:449 r:170"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg9, "transparent", "black")
+	checkError(err)
+	svg10 := "circle x:449 y:449 r:165"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg10, "transparent", "black")
+	checkError(err)
+	svg11 := "circle x:449 y:449 r:55"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg11, "transparent", "black")
+	checkError(err)
+	svg12 := "circle x:449 y:449 r:50"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg12, "#555555", "black")
+	checkError(err)
+	svg13 := "circle x:519 y:519 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg13, "#999999", "#999999")
+	checkError(err)
+	svg14 := "circle x:519 y:379 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg14, "#999999", "#999999")
+	checkError(err)
+	svg15 := "circle x:379 y:519 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg15, "#999999", "#999999")
+	checkError(err)
+	svg16 := "circle x:379 y:379 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg16, "#999999", "#999999")
+	checkError(err)
+
+	svg17 := "M725 725 L725 650 650 725 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg17, "#222222", "#222222")
+	checkError(err)
+	svg18 := "M175 725 L175 650 250 725 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg18, "#222222", "#222222")
+	checkError(err)
+	svg19 := "M175 175 L175 250 250 175 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg19, "#222222", "#222222")
+	checkError(err)
+	svg20 := "M725 175 L650 175 725 250 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg20, "#222222", "#222222")
+	checkError(err)
+	svg21 := "M449 600 L439 540 449 520 459 540 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg21, "#222222", "#222222")
+	checkError(err)
+	svg22 := "M449 300 L439 360 449 380 459 360 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg22, "#222222", "#222222")
+	checkError(err)
+	svg23 := "M300 449 L360 439 380 449 360 459 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg23, "#222222", "#222222")
+	checkError(err)
+	svg24 := "M600 449 L540 439 520 449 540 459 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg24, "#222222", "#222222")
+	checkError(err)
+
+	// Close the canvas.
+	ink1, err := canvas.CloseCanvas()
+	checkError(err)
+
+	fmt.Println("%d", ink1)
 
 	generateHTML(canvas)
 }
@@ -182,10 +194,10 @@ func generateHTML(canvas blockartlib.Canvas) {
 	defer HTML.Close()
 
 	// Append starting HTML tags
-	pre := []byte("<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
+	pre := []byte("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
 	body := []byte("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"900\" height=\"900\" version=\"1.1\">\n")
 	HTML.Write(pre)
-	HTML.Write(Body)
+	HTML.Write(body)
 
 	// Get the longest blockchain
 	// Start with the genesis block and recursively add to chain

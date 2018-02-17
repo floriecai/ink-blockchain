@@ -24,7 +24,6 @@ func main() {
 	priv1, _ := ecdsa.GenerateKey(p384, rand.Reader)
 
 	privateKeyBytes, _ := x509.MarshalECPrivateKey(priv1)
-
 	encodedPrivateBytes := hex.EncodeToString(privateKeyBytes)
 
 	privateKeyBytesRestored, _ := hex.DecodeString(encodedPrivateBytes)
@@ -50,16 +49,14 @@ func main() {
 
 	// Write key pair to file
 	fmt.Println("Start writing to file")
-	f, err := os.Create("../key-pairs.txt")
+	f, err := os.Create("./key-pairs.txt")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	f.Write([]byte("Private:"))
-	f.Write(privateKeyBytes)
+	f.Write([]byte(encodedPrivateBytes))
 	f.Write([]byte("\n"))
-	f.Write([]byte("Public:"))
-	f.Write(publicKeyBytes)
+	f.Write([]byte(encodedPublicBytes))
 	f.Write([]byte("\n"))
 	f.Close()
 	fmt.Println("Finished writing to file")
