@@ -3,10 +3,8 @@
 # Base source code:
 # https://gist.github.com/mafayaz/faf938a896357c3a4c9d6da27edcff08
 #
-# This file takes information from HTTP POST from the ThingPark
-# server and logs it into human-readable format
-#
 # Usage: python <filename> <port number> <IP address>
+# Very simple webserver for serving up two files: web.html and svg.svg
 
 from BaseHTTPServer import BaseHTTPRequestHandler,HTTPServer
 from SocketServer import ThreadingMixIn
@@ -15,9 +13,6 @@ import argparse
 import re
 import cgi
 import json
-
-raw_out_file = '/home/jan/server_output.txt'
-parsed_out_file = '/home/jan/parsed_lora_info.txt'
 
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     # Code to handle HTTP POST
