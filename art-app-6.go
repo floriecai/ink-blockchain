@@ -1,10 +1,7 @@
 /*
 
-A trivial application to illustrate how the blockartlib library can be
-used from an application in project 1 for UBC CS 416 2017W2.
+This art-app is purely used to generate the HTML file
 
-Usage:
-go run art-app.go
 */
 
 package main
@@ -47,22 +44,7 @@ func main() {
 	fmt.Println(canvas)
 	fmt.Println(settings)
 
-	validateNum := uint8(3)
-
-	// First corner: (0,0)
-	// Draw horizontal lines
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "red")
-	checkError(err)
-
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 0", "transparent", "red")
-	checkError(err)
-
-	// Draw vertical lines
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
-	checkError(err)
-
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 0 5", "transparent", "red")
-	checkError(err)
+	generateHTML(canvas)
 
 	// Close the canvas.
 	ink1, err := canvas.CloseCanvas()
@@ -104,12 +86,12 @@ func getLongestBlockchain(currBlockHash string, canvas blockartlib.Canvas) []str
 // HTML SVG strings from the longest blockchain in canvas
 func generateHTML(canvas blockartlib.Canvas) {
 	// Create a blank HTML file
-	HTML, err := os.Create("./art-app-1.html")
+	HTML, err := os.Create("./art-app.html")
 	checkError(err)
 	defer HTML.Close()
 
 	// Append starting HTML tags
-	pre := []byte("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
+	pre := []byte("<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
 	body := []byte("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"900\" height=\"900\" version=\"1.1\">\n")
 	HTML.Write(pre)
 	HTML.Write(body)

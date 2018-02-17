@@ -49,19 +49,30 @@ func main() {
 
 	validateNum := uint8(3)
 
-	// First corner: (0,0)
-	// Draw horizontal lines
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "red")
+	// Jan's SVG -- Part 3
+	svg17 := "M725 725 L725 650 650 725 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg17, "#222222", "#222222")
 	checkError(err)
-
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 0", "transparent", "red")
+	svg18 := "M175 725 L175 650 250 725 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg18, "#222222", "#222222")
 	checkError(err)
-
-	// Draw vertical lines
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
+	svg19 := "M175 175 L175 250 250 175 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg19, "#222222", "#222222")
 	checkError(err)
-
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 0 5", "transparent", "red")
+	svg20 := "M725 175 L650 175 725 250 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg20, "#222222", "#222222")
+	checkError(err)
+	svg21 := "M449 600 L439 540 449 520 459 540 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg21, "#222222", "#222222")
+	checkError(err)
+	svg22 := "M449 300 L439 360 449 380 459 360 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg22, "#222222", "#222222")
+	checkError(err)
+	svg23 := "M300 449 L360 439 380 449 360 459 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg23, "#222222", "#222222")
+	checkError(err)
+	svg24 := "M600 449 L540 439 520 449 540 459 Z"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg24, "#222222", "#222222")
 	checkError(err)
 
 	// Close the canvas.

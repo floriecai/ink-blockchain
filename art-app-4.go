@@ -49,19 +49,33 @@ func main() {
 
 	validateNum := uint8(3)
 
-	// First corner: (0,0)
-	// Draw horizontal lines
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "red")
+	// Jan's SVG -- Part 2
+	svg8 := "circle x:449 y:449 r:175"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg8, "transparent", "black")
 	checkError(err)
-
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 0", "transparent", "red")
+	svg9 := "circle x:449 y:449 r:170"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg9, "transparent", "black")
 	checkError(err)
-
-	// Draw vertical lines
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
+	svg10 := "circle x:449 y:449 r:165"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg10, "transparent", "black")
 	checkError(err)
-
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 0 5", "transparent", "red")
+	svg11 := "circle x:449 y:449 r:55"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg11, "transparent", "black")
+	checkError(err)
+	svg12 := "circle x:449 y:449 r:50"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg12, "#555555", "black")
+	checkError(err)
+	svg13 := "circle x:519 y:519 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg13, "#999999", "#999999")
+	checkError(err)
+	svg14 := "circle x:519 y:379 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg14, "#999999", "#999999")
+	checkError(err)
+	svg15 := "circle x:379 y:519 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg15, "#999999", "#999999")
+	checkError(err)
+	svg16 := "circle x:379 y:379 r:25"
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.CIRCLE, svg16, "#999999", "#999999")
 	checkError(err)
 
 	// Close the canvas.
