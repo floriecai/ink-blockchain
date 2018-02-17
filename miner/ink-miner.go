@@ -170,7 +170,7 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 	CheckError(err, "OpenLibMinerConn:Listen")
 
 	fmt.Println("Start writing ip:port to file")
-	f, err := os.Create("./ip-ports.txt")
+	f, err := os.Open("./ip-ports.txt")
 	_ = CheckError(err, "OpenLibMinerConn:os.Create")
 	f.Write([]byte(tcp.Addr().String()))
 	f.Write([]byte("\n"))
@@ -1259,6 +1259,22 @@ func Recover() {
 	}
 }
 
+// Code from https://gist.github.com/jniltinho/9787946
+func GeneratePublicIP() string {
+	addrs, err := net.InterfaceAddrs()
+	CheckError(err, "GeneratePublicIP")
+
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String() + ":"
+			}
+		}
+	}
+
+	return "Could not find IP"
+}
+
 /*******************************
 | Main
 ********************************/
@@ -1281,7 +1297,10 @@ func Mine(serverIP, pubKey, privKey string) {
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 	// Listening Address
-	ln, _ := net.Listen("tcp", ":0")
+	publicIP := GeneratePublicIP()
+	fmt.Println(publicIP)
+
+	ln, _ := net.Listen("tcp", publicIP)
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
 
