@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"net"
 	"net/rpc"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -167,6 +168,14 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 
 	tcp, err := net.Listen("tcp", ip)
 	CheckError(err, "OpenLibMinerConn:Listen")
+
+	fmt.Println("Start writing ip:port to file")
+	f, err := os.Open("./ip-ports.txt")
+	_ = CheckError(err, "OpenLibMinerConn:os.Create")
+	f.Write([]byte(tcp.Addr().String()))
+	f.Write([]byte("\n"))
+	f.Close()
+	fmt.Println("Finished writing to file")
 
 	MinerInstance.LMI = lib_miner_int
 
@@ -1250,12 +1259,31 @@ func Recover() {
 	}
 }
 
+// Code from https://gist.github.com/jniltinho/9787946
+func GeneratePublicIP() string {
+	addrs, err := net.InterfaceAddrs()
+	CheckError(err, "GeneratePublicIP")
+
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String() + ":"
+			}
+		}
+	}
+
+	return "Could not find IP"
+}
+
 /*******************************
 | Main
 ********************************/
 func Mine(serverIP, pubKey, privKey string) {
 	gob.Register(&net.TCPAddr{})
 	gob.Register(&elliptic.CurveParams{})
+	// serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
+	serverIP = os.Args[1]
+
 	BlockCond = &sync.Cond{L: &sync.Mutex{}}
 
 	// 1. Setup the singleton miner instance
@@ -1263,7 +1291,10 @@ func Mine(serverIP, pubKey, privKey string) {
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 	// Listening Address
-	ln, _ := net.Listen("tcp", ":0")
+	publicIP := GeneratePublicIP()
+	fmt.Println(publicIP)
+
+	ln, _ := net.Listen("tcp", publicIP)
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
 
