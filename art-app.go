@@ -21,6 +21,7 @@ import (
 )
 
 func main() {
+<<<<<<< HEAD
 
 	// 	<svg>
 	// <path d="M 480 40 L 430 120 L 480 150 L 520 120 H 520 L 480 40" fill="red" stroke="red"></path>
@@ -33,8 +34,12 @@ func main() {
 	// <path d="M 280 140 L 560 50" fill="transpraent" stroke="purple"><path>
 	// </svg>
 	minerAddr := "127.0.0.1:50417"
+=======
+	minerAddr := "127.0.0.1:34492"
+>>>>>>> ubc/master
 
-	privKeyString := "3081a402010104306c9de9cce82755eca357beed8f1c9e9df8594ce575127fe10486cbb6bb87d3d5e3a0e2fb4d6fab7fcbce5a564f313bf2a00706052b81040022a164036200043bdd1a0e32123cf670d74ee918ef4c42a334190dfafcf93ca66955561ff85d49727076dd57705b9f904961292b352fda712c1b546ea3362c3fa63e147add351321c17189ad8b3ada63b0979905b67ca57726193ff939af38ef3aa407424ac55f"
+
+	privKeyString := "3081a4020101043069f5ffffd085b51a78166f766330f4771674d8cadfd4bc3556082d59fcaa8d56a74e487e125318c0abb0c71e3852b341a00706052b81040022a164036200043bda4ebb0d9f3d2270e41ce140b889bdb94e889fb7c1b0f082c9919bbb5cde31af295da333e5f216336bface06843b0f5ef7b36d1ab0b28bbe458559b8d48df15763e2e6e955f8102aca1c5e8413a248547ece44bc1be5326debc14cb8add5ed"
 	privateKeyBytes, _ := hex.DecodeString(privKeyString)
 	privKey, _ := x509.ParseECPrivateKey(privateKeyBytes)
 	// TODO: use crypto/ecdsa to read pub/priv keys from a file argument.
@@ -48,7 +53,7 @@ func main() {
 	fmt.Println(canvas)
 	fmt.Println(settings)
 
-	validateNum := uint8(2)
+	validateNum := uint8(6)
 
 	// Add a line.
 	shapeHash, blockHash, ink, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
@@ -56,21 +61,23 @@ func main() {
 		return
 	}
 
-	fmt.Println("%s, %s, %d", shapeHash, blockHash, ink)
+	fmt.Println("added a line:", shapeHash, blockHash, ink)
 	// Add another line.
 	shapeHash2, blockHash2, ink2, err := canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "blue")
 	if checkError(err) != nil {
 		return
 	}
 
-	fmt.Println("%s, %s, %d", shapeHash2, blockHash2, ink2)
+	fmt.Println("added another line", shapeHash2, blockHash2, ink2)
+
+	fmt.Println("deleting a line!")
 	// Delete the first line.
 	ink3, err := canvas.DeleteShape(validateNum, shapeHash)
 	if checkError(err) != nil {
 		return
 	}
 
-	fmt.Println("%d", ink3)
+	fmt.Println("deleted a line", ink3)
 	// assert ink3 > ink2
 
 	// Close the canvas.
@@ -79,7 +86,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("%d", ink4)
+	fmt.Println("closed canvas", ink4)
 }
 
 // If error is non-nil, print it out and return it.

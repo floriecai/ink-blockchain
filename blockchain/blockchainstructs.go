@@ -20,6 +20,7 @@ type Operation struct {
 }
 
 type OperationInfo struct {
+	AddSig string // empty str for ADD, OpSig of corresponding ADD for a DELETE
 	OpSig  string // The shapehash that we will return
 	PubKey string
 	Op     Operation

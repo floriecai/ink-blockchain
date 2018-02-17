@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"math/rand"
 
 	"../blockchain"
 )
@@ -19,7 +20,6 @@ func Verify(hash string, N int) bool {
 func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan blockchain.Block, done chan bool) {
 	h := md5.New()
 	N := int(powDiff)
-	nonce := start
 	//fmt.Println("starting operation with start point: ", start)
 	for {
 		select {
@@ -27,7 +27,7 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 			//fmt.Println("job done, stopping")
 			return
 		default:
-			block.Nonce = nonce
+			block.Nonce = rand.Uint32()
 			bytes, _ := json.Marshal(block)
 			h.Write(bytes)
 			hash := hex.EncodeToString(h.Sum(nil))
@@ -37,16 +37,15 @@ func Solve(block blockchain.Block, powDiff uint8, start uint32, solved chan bloc
 				return
 			} else {
 				h.Reset()
-				nonce += 1
 			}
 		}
 	}
 }
 
 func Recover() {
-    // recover from panic caused by writing to a closed channel
-    if r := recover(); r != nil {
+	// recover from panic caused by writing to a closed channel
+	if r := recover(); r != nil {
 		fmt.Println("recovered from closed channel")
-        return
-    }
+		return
+	}
 }

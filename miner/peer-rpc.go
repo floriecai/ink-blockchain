@@ -14,14 +14,14 @@ Peer RPC calls:
 
 */
 
-package main
+package miner
 
 import (
 	"fmt"
 	"net"
 	"net/rpc"
-
 	"sync"
+	"log"
 
 	"../blockchain"
 	"../shapelib"
@@ -40,6 +40,7 @@ type PeerRpc struct {
 	opSCh  chan blockchain.OperationInfo
 	blkSCh chan blockchain.Block
 	reqCh  chan net.Addr
+	blks   map[string]Empty
 }
 
 // Empty struct. Use for filling required but unused function parameters.
@@ -74,9 +75,10 @@ type GetBlockChainArgs struct {
 func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 
 	// - Send through request channel to Connection Manager to connect next time
+	log.Printf("write to ch")
 	p.reqCh <- args.Addr
 	blockchain := make([]blockchain.Block, 0)
-	for i, node :=  range BlockNodeArray {
+	for i, node := range BlockNodeArray {
 		if i != 0 {
 			blockchain = append(blockchain, node.Block)
 		}
@@ -95,8 +97,8 @@ func (p *PeerRpc) Hb(args *Empty, reply *Empty) error {
 
 // Get a shape interface from an operation.
 func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
-	pathlist, err := utils.GetParsedSVG(op.SVGString)
-	if err == nil {
+	pathlist, parsingErr := utils.GetParsedSVG(op.SVGString)
+	if parsingErr == nil {
 		// Error is nil, should be parsable into shapelib.Path
 		return utils.SVGToPoints(pathlist,
 			int(m.Settings.CanvasSettings.CanvasXMax),
@@ -111,7 +113,7 @@ func (m Miner) getShapeFromOp(op blockchain.Operation) (shapelib.Shape, error) {
 		int(m.Settings.CanvasSettings.CanvasXMax))
 	if err != nil {
 		fmt.Println("SVG string is neither circle nor path:", op.SVGString)
-		return circ, err
+		return circ, parsingErr
 	}
 
 	// FIXME: change for circle
@@ -130,7 +132,7 @@ func (m Miner) getPathFromOp(op blockchain.Operation) (shapelib.Path, error) {
 	// Get the shapelib.Path representation for this svg path
 	return utils.SVGToPoints(pathlist, int(m.Settings.CanvasSettings.CanvasXMax),
 		int(m.Settings.CanvasSettings.CanvasXMax), op.Fill != "transparent",
-			op.Stroke != "transparent")
+		op.Stroke != "transparent")
 }
 
 // This lock is intended to be used so that only one op or block will be in the
@@ -154,67 +156,84 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	subarr, inkRequired := shape.SubArrayAndCost()
 
 	validateLock.Lock()
-	defer validateLock.Unlock()
 
-	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 	if args.OpInfo.Op.OpType == blockchain.ADD {
-		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString)
+		err = p.miner.checkInkAndConflicts(subarr, inkRequired, args.OpInfo.PubKey, blocks, args.OpInfo.Op.SVGString, args.OpInfo.OpSig)
 	} else {
-		err = p.miner.checkDeletion(args.OpInfo.OpSig, args.OpInfo.PubKey, blocks)
+		fmt.Println("Checking deletion")
+		err = p.miner.checkDeletion(args.OpInfo.AddSig, args.OpInfo.PubKey, blocks)
+		if err != nil {
+			fmt.Println("DELETE WAS BAD!!!")
+		}
 	}
+	validateLock.Unlock()
 
 	if err != nil {
 		return err
 	}
 
 	// Update the solver. There will likely need to be additional logic somewhere here.
+	log.Printf("write to ch")
 	p.opSCh <- args.OpInfo
 
 	// Propagate op to list of connected peers.
 	args.TTL--
 	if args.TTL > 0 {
+		log.Printf("write to ch")
 		p.opCh <- args
 	}
 
 	return nil
 }
 
+var msgLock sync.Mutex
+
 // This RPC is used to send a new block (addshape, deleteshape) to miners.
 // Will not return any useful information.
 func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 	//fmt.Println("PropagateBlock called")
-
-	validateLock.Lock()
-	defer validateLock.Unlock()
-
-	// Find the path that the block should be on, no guarantee it is the longest
-	path, err := GetPath(args.Block.PrevHash, BlockHashMap, BlockNodeArray)
-	if CheckError(err, "PropagateBlock:GetPath"){
+	msgLock.Lock()
+	blkHash := GetBlockHash(args.Block)
+	if _, exists := p.blks[blkHash]; exists {
+		//fmt.Println("Ignoring already received blockhash")
+		msgLock.Unlock()
 		return nil
+	} else {
+		p.blks[blkHash] = Empty{}
+		msgLock.Unlock()
 	}
 
+	// Find the path that the block should be on, no guarantee it is the longest
+	path := GetPath(args.Block.PrevHash)
+
 	// Validate the block, if the block is not valid just drop it
-	if p.miner.ValidateBlock(args.Block, path) {
-		// Propagate block to list of connected peers.
-		args.TTL--
+	validateLock.Lock()
+	ok := p.miner.ValidateBlock(args.Block, path)
+	validateLock.Unlock()
+
+	if ok {
+		// Propagate block to list of connected peers. Too lazy to get rid of TTL;
+		// it's not used any more for PropgateBlock though.
 		if args.TTL > 0 {
-			//fmt.Println("Propgation:", args.TTL)
+			log.Printf("write to ch")
 			p.blkCh <- args
 		}
 
 		// Snapshot the current longest path
-		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		longest, length := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 		lastblock := longest[length-1]
 
 		// - Add block to block chain.
 		InsertBlock(args.Block)
 
 		// Check if the longest path changed
-		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash, BlockHashMap, BlockNodeArray)
+		newlongest, newlength := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 		newlastblock := newlongest[newlength-1]
 
 		// If the longest path changed we should build off of it so send it to problem solver
 		if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
+			fmt.Println("Propgation:", args.TTL)
 			p.blkSCh <- args.Block
 		}
 	}
@@ -224,16 +243,16 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 // This RPC is used for peers to get latest information when they are newly
 // initalized. No useful argument.
-func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
+func (p *PeerRpc) GetBlockChain(args Empty, reply *[]blockchain.Block) error {
 	fmt.Println("GetBlockChain called")
 
-	blockchain := make([]blockchain.Block, 0)
-	for i, node :=  range BlockNodeArray {
+	chain := make([]blockchain.Block, 0)
+	for i, node := range BlockNodeArray {
 		if i != 0 {
-			blockchain = append(blockchain, node.Block)
+			chain = append(chain, node.Block)
 		}
 	}
-	*reply = GetBlockChainArgs{blockchain}
+	*reply = chain
 
 	return nil
 }
@@ -242,12 +261,14 @@ func (p *PeerRpc) GetBlockChain(args Empty, reply *GetBlockChainArgs) error {
 func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 	blkCh chan PropagateBlockArgs, opSCh chan blockchain.OperationInfo,
 	blkSCh chan blockchain.Block, reqCh chan net.Addr) {
-	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh}
+	pRpc := PeerRpc{miner, opCh, blkCh, opSCh, blkSCh, reqCh, make(map[string]Empty)}
 
 	fmt.Println("listenPeerRpc::listening on: ", ln.Addr().String())
 
 	server := rpc.NewServer()
 	server.RegisterName("Peer", &pRpc)
+
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	server.Accept(ln)
 }

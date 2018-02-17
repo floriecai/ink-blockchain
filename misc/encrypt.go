@@ -45,7 +45,7 @@ func main() {
 	}
 
 	fmt.Printf("Key was restored from string successfully\n")
-	fmt.Printf("go run miner/*.go 127.0.0.1:12345 %s %s\n", encodedPublicBytes, encodedPrivateBytes)
+	fmt.Printf("go run ink-miner.go 127.0.0.1:12345 %s %s\n", encodedPublicBytes, encodedPrivateBytes)
 
 	// Write key pair to file
 	fmt.Println("Start writing to file")
