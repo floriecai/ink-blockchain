@@ -74,7 +74,7 @@ func (c ZCommand) IsRelative() bool { return false }
 type SVGPath []SVGCommand
 
 // Given a blockchain.OperationInfo, returns the corresponding html svg element
-// i.e. <svg d="M 0 0 H 10 10 v 20 Z" fill="transparent" stroke="red">
+// i.e. <path d="M 0 0 H 10 10 v 20 Z" fill="transparent" stroke="red">
 func GetHTMLSVGString(op blockchain.Operation) string {
 	var fill, stroke string
 	if op.OpType == blockchain.DELETE {
@@ -84,7 +84,16 @@ func GetHTMLSVGString(op blockchain.Operation) string {
 		fill = op.Fill
 		stroke = op.Stroke
 	}
-	return fmt.Sprintf("<svg d=\"%s\" fill=\"%s\" stroke=\"%s\">", op.SVGString, fill, stroke)
+
+	reCircle := regexp.MustCompile(`circle x:(\d+) y:(\d+) r:(\d+)`)
+	if reCircle.MatchString(op.SVGString) {
+		reNumber := regexp.MustCompile(`(\d)+`)
+		numbers := reNumber.FindAllString(op.SVGString, -1)
+		cx, cy, r := numbers[0], numbers[1], numbers[2]
+		return fmt.Sprintf("<circle cx=\"%s\" cy=\"%s\" r=\"%s\" fill=\"%s\" stroke=\"%s\">", cx, cy, r, fill, stroke)
+	} else {
+		return fmt.Sprintf("<path d=\"%s\" fill=\"%s\" fill-rule=\"evenodd\" stroke=\"%s\">", op.SVGString, fill, stroke)
+	}
 }
 
 // Parses a string into a list of SVGCommands

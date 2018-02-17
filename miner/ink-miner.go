@@ -142,6 +142,11 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 
 	fmt.Println("OpenLibMinerConn:: Listening on: ", tcp.Addr().String())
 	server.Accept(tcp)
+
+	f, _ := os.Create("../ip-ports")
+	f.Write([]byte(tcp.Addr().String()))
+	f.Write([]byte("\n"))
+	f.Close()
 }
 
 func (lmi *LibMinerInterface) OpenCanvas(req *libminer.Request, response *libminer.RegisterResponse) (err error) {

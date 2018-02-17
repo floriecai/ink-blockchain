@@ -33,7 +33,7 @@ const (
 	PATH ShapeType = iota
 
 	// Circle shape (extra credit).
-	// CIRCLE
+	CIRCLE
 )
 
 // Settings for a canvas in BlockArt.

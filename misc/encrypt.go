@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"os"
 )
 
 // To encode publicKey use:
@@ -46,4 +47,20 @@ func main() {
 
 	fmt.Printf("Key was restored from string successfully\n")
 	fmt.Printf("go run miner/*.go 127.0.0.1:12345 %s %s\n", encodedPublicBytes, encodedPrivateBytes)
+
+	// Write key pair to file
+	fmt.Println("Start writing to file")
+	f, err := os.Create("../key-pairs.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	f.Write([]byte("Private:"))
+	f.Write(privateKeyBytes)
+	f.Write([]byte("\n"))
+	f.Write([]byte("Public:"))
+	f.Write(publicKeyBytes)
+	f.Write([]byte("\n"))
+	f.Close()
+	fmt.Println("Finished writing to file")
 }
