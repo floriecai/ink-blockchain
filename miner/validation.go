@@ -5,7 +5,7 @@ and delete operations for shapes in the blockchain.
 
 */
 
-package main
+package miner
 
 import (
 	"fmt"

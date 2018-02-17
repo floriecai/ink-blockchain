@@ -14,7 +14,7 @@ Peer RPC calls:
 
 */
 
-package main
+package miner
 
 import (
 	"fmt"
