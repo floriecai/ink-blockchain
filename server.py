@@ -30,37 +30,8 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         s.send_response(200)
         s.send_header("Content-type", "text/html")
         s.end_headers()
-        s.wfile.write("\n\
-<html><head><title>This is the worst hack-job I've ever done</title></head><body><p>Something something svg...</p>\n\
-<object id='roo' data='svg.svg' type='image/svg+xml'></object><script> \n\
-function getSvg() { \n\
-console.log('hello')\n\
-var oldObj = document.getElementById('roo')\n\
-var newObj = document.createElement('object')\n\
-newObj.data = 'svg.svg'\n\
-newObj.type = 'image/svg+xml'\n\
-newObj.id = 'roo'\n\
-oldObj.remove()\n\
-document.body.appendChild(newObj)\n\
-} \n\
- \n\
-function draw() { \n\
-	var j = 50 \n\
- \n\
-	for (var a= [], i = 0; i < 8192; i++) { \n\
-		a[i] = i % j ? 0 : j \n\
-	} \n\
-	//var last = document.body.appendChild(getSvg()) \n\
- \n\
-	var f = function() { \n\
-                getSvg()\n\
-	} \n\
- \n\
-	setInterval(f, 1000) \n\
-} \n\
- \n\
-draw()\n\
- </script></body></html> ")
+        with open('web.html', 'r') as f:
+            s.wfile.write(f.read())
 
 # Rest of source code was unmodified from the original; setting up HTTP server
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
