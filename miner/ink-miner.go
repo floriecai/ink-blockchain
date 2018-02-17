@@ -46,7 +46,7 @@ const (
 	// Global TTL of propagate requests
 	TTL = 2
 	// Maximum threads we will use for problem solving
-	MAX_THREADS = 4
+	MAX_THREADS = 2
 	// Num new blocks with no operation before repropagating op
 	BLOCKS_BEFORE_REPROPAGATE = 10
 )
