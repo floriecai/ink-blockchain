@@ -1,4 +1,4 @@
-package main
+package miner
 
 import (
 	"crypto/ecdsa"
@@ -17,11 +17,9 @@ import (
 	"math/big"
 	"net"
 	"net/rpc"
-	"os"
 	"strings"
 	"sync"
 	"time"
-
 	"../blockchain"
 	"../libminer"
 	"../minerserver"
@@ -1255,11 +1253,10 @@ func Recover() {
 /*******************************
 | Main
 ********************************/
-func main() {
+func Mine(serverIP, pubKey, privKey string) {
 	gob.Register(&net.TCPAddr{})
 	gob.Register(&elliptic.CurveParams{})
 	BlockCond = &sync.Cond{L: &sync.Mutex{}}
-	serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
 
 	// 1. Setup the singleton miner instance
 	MinerInstance = new(Miner)
