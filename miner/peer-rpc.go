@@ -18,10 +18,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/rpc"
 	"sync"
+	"log"
 
 	"../blockchain"
 	"../shapelib"
@@ -75,6 +75,7 @@ type GetBlockChainArgs struct {
 func (p *PeerRpc) Connect(args ConnectArgs, reply *[]blockchain.Block) error {
 
 	// - Send through request channel to Connection Manager to connect next time
+	log.Printf("write to ch")
 	p.reqCh <- args.Addr
 	blockchain := make([]blockchain.Block, 0)
 	for i, node := range BlockNodeArray {
@@ -155,9 +156,6 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 	subarr, inkRequired := shape.SubArrayAndCost()
 
 	validateLock.Lock()
-	log.Println("Got ValidateLock in Pop")
-	defer log.Println("Release ValidateLock in Pop")
-	defer validateLock.Unlock()
 
 	blocks, _ := GetLongestPath(p.miner.Settings.GenesisBlockHash)
 	if args.OpInfo.Op.OpType == blockchain.ADD {
@@ -169,17 +167,20 @@ func (p *PeerRpc) PropagateOp(args PropagateOpArgs, reply *Empty) error {
 			fmt.Println("DELETE WAS BAD!!!")
 		}
 	}
+	validateLock.Unlock()
 
 	if err != nil {
 		return err
 	}
 
 	// Update the solver. There will likely need to be additional logic somewhere here.
+	log.Printf("write to ch")
 	p.opSCh <- args.OpInfo
 
 	// Propagate op to list of connected peers.
 	args.TTL--
 	if args.TTL > 0 {
+		log.Printf("write to ch")
 		p.opCh <- args
 	}
 
@@ -203,18 +204,19 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 		msgLock.Unlock()
 	}
 
-	validateLock.Lock()
-	defer validateLock.Unlock()
-
 	// Find the path that the block should be on, no guarantee it is the longest
 	path := GetPath(args.Block.PrevHash)
 
 	// Validate the block, if the block is not valid just drop it
-	if p.miner.ValidateBlock(args.Block, path) {
+	validateLock.Lock()
+	ok := p.miner.ValidateBlock(args.Block, path)
+	validateLock.Unlock()
+
+	if ok {
 		// Propagate block to list of connected peers. Too lazy to get rid of TTL;
 		// it's not used any more for PropgateBlock though.
 		if args.TTL > 0 {
-			//fmt.Println("Propgation:", args.TTL)
+			log.Printf("write to ch")
 			p.blkCh <- args
 		}
 
@@ -231,6 +233,7 @@ func (p *PeerRpc) PropagateBlock(args PropagateBlockArgs, reply *Empty) error {
 
 		// If the longest path changed we should build off of it so send it to problem solver
 		if newlength >= length && newlastblock.Nonce != lastblock.Nonce && newlastblock.MinerPubKey != lastblock.MinerPubKey {
+			fmt.Println("Propgation:", args.TTL)
 			p.blkSCh <- args.Block
 		}
 	}
@@ -264,6 +267,8 @@ func listenPeerRpc(ln net.Listener, miner *Miner, opCh chan PropagateOpArgs,
 
 	server := rpc.NewServer()
 	server.RegisterName("Peer", &pRpc)
+
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	server.Accept(ln)
 }

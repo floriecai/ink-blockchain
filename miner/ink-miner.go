@@ -240,7 +240,9 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 			OpInfo: opInfo,
 			TTL:    TTL}
 
+		log.Printf("write to ch")
 		lmi.POpChan <- propOpArgs
+		log.Printf("write to ch")
 		lmi.SOpChan <- opInfo
 
 		blockHash := ""
@@ -263,7 +265,9 @@ func (lmi *LibMinerInterface) Draw(req *libminer.Request, response *libminer.Dra
 					// If too many, reattempt operation
 					count++
 					if count > BLOCKS_BEFORE_REPROPAGATE {
+						log.Printf("write to ch")
 						lmi.POpChan <- propOpArgs
+						log.Printf("write to ch")
 						lmi.SOpChan <- opInfo
 						fmt.Println("No dupe count too high - republishing")
 						count = 0
@@ -371,7 +375,9 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 			OpInfo: opInfo,
 			TTL:    TTL}
 
+		log.Printf("write to ch")
 		lmi.POpChan <- propOpArgs
+		log.Printf("write to ch")
 		lmi.SOpChan <- opInfo
 
 		count := 0
@@ -391,11 +397,10 @@ func (lmi *LibMinerInterface) Delete(req *libminer.Request, response *libminer.I
 				count++
 
 				if count > BLOCKS_BEFORE_REPROPAGATE {
-					fmt.Println("No op count surpassed - repropagating...")
+					log.Printf("write to ch")
 					lmi.POpChan <- propOpArgs
-					fmt.Println("something...")
+					log.Printf("write to ch")
 					lmi.SOpChan <- opInfo
-					fmt.Println("the heck??")
 					count = 0
 				}
 
@@ -561,9 +566,9 @@ func InsertBlock(newBlock blockchain.Block) (err error) {
 			BlockArrayMutex.Unlock()
 		} else {
 			ParentMapMutex.Lock()
-			defer ParentMapMutex.Unlock()
 			existingChildren, _ := ParentHashMap[newBlock.PrevHash]
 			ParentHashMap[newBlock.PrevHash] = append(existingChildren, newBlockIndex)
+			ParentMapMutex.Unlock()
 		}
 
 		BlockCond.L.Lock()
@@ -808,6 +813,8 @@ func (msi *MinerServerInterface) Register(minerAddr net.Addr) {
 	reqArgs := minerserver.MinerInfo{Address: minerAddr, Key: MinerInstance.PrivKey.PublicKey}
 	var resp minerserver.MinerNetSettings
 	err := msi.Client.Call("RServer.Register", reqArgs, &resp)
+	resp.PoWDifficultyOpBlock ++
+	resp.PoWDifficultyNoOpBlock ++
 	CheckError(err, "Register:Client.Call")
 	MinerInstance.Settings = resp
 }
@@ -877,7 +884,7 @@ func ManageConnections(pop chan PropagateOpArgs, pblock chan PropagateBlockArgs,
 		select {
 		case <-heartbeat:
 			MinerInstance.MSI.ServerHeartBeat()
-			if count == 50{
+			if count >= 50 {
 				PeerSync()
 				count = 0
 			} else {
@@ -935,26 +942,20 @@ func PeerHeartBeats() {
 // Send a PropagateOp call to each peer
 // Assumption: Nothing needs to be done on the miner itself, only send the op onwards
 func PeerPropagateOp(op PropagateOpArgs) {
-	for addr, peer := range PeerList {
+	for _, peer := range PeerList {
 		empty := new(Empty)
 		args := PropagateOpArgs{op.OpInfo, op.TTL}
-		err := peer.Client.Call("Peer.PropagateOp", args, &empty)
-		if !CheckError(err, "PeerPropagateOp:"+addr) {
-			peer.LastHeartBeat = time.Now()
-		}
+		peer.Client.Call("Peer.PropagateOp", args, &empty)
 	}
 }
 
 // Send a PropagateBlock call to each peer
 // Assumption: Nothing needs to be done on the miner itself, only send the block onwards
 func PeerPropagateBlock(block PropagateBlockArgs) {
-	for addr, peer := range PeerList {
+	for _, peer := range PeerList {
 		empty := new(Empty)
 		args := PropagateBlockArgs{block.Block, block.TTL}
-		err := peer.Client.Call("Peer.PropagateBlock", args, &empty)
-		if !CheckError(err, "PeerPropagateBlock:"+addr) {
-			peer.LastHeartBeat = time.Now()
-		}
+		peer.Client.Call("Peer.PropagateBlock", args, &empty)
 	}
 }
 
@@ -1270,11 +1271,11 @@ func main() {
 	MinerInstance.Addr = addr
 
 	// 2. Create communication channels between goroutines
-	pop := make(chan PropagateOpArgs, 10)
-	pblock := make(chan PropagateBlockArgs, 10)
-	sop := make(chan blockchain.OperationInfo, 1)
-	sblock := make(chan blockchain.Block, 1)
-	peerconn := make(chan net.Addr, 1)
+	pop := make(chan PropagateOpArgs, 1024)
+	pblock := make(chan PropagateBlockArgs, 1024)
+	sop := make(chan blockchain.OperationInfo, 1024)
+	sblock := make(chan blockchain.Block, 1024)
+	peerconn := make(chan net.Addr, 64)
 
 	// 3. Setup Miner-Miner Listener
 	go listenPeerRpc(ln, MinerInstance, pop, pblock, sop, sblock, peerconn)
