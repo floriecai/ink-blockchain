@@ -182,7 +182,7 @@ func generateHTML(canvas blockartlib.Canvas) {
 	defer HTML.Close()
 
 	// Append starting HTML tags
-	pre := []byte("<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
+	pre := []byte("<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
 	body := []byte("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"900\" height=\"900\" version=\"1.1\">\n")
 	HTML.Write(pre)
 	HTML.Write(Body)
@@ -202,7 +202,7 @@ func generateHTML(canvas blockartlib.Canvas) {
 			// Expect to see an InvalidShapeHashError
 			// as the first line was deleted, but art-node can
 			// never tell strictly by shapeHash
-			if err == nil || err.(blockartlib.InvalidShapeHashError) {
+			if err == nil || t, ok := err.(blockartlib.InvalidShapeHashError); ok {
 				HTML.Write([]byte("\t\t" + HTMLSVGString + "\n"))
 			} else {
 				break
