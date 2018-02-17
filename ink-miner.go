@@ -2,7 +2,9 @@
 package main
 
 import "./miner"
+import "ioutil"
 import "os"
+import "strings"
 
 func main(){
 	serverIP := os.Args[1]
