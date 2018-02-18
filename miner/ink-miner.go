@@ -480,6 +480,18 @@ func (lmi *LibMinerInterface) GetBlock(req *libminer.Request, response *libminer
 			return nil
 		}
 
+		BlockArrayMutex.Lock()
+		blockNodes := make([]blockchain.BlockNode, len(BlockNodeArray))
+		copy(blockNodes, BlockNodeArray)
+		BlockArrayMutex.Unlock()
+
+		var children []blockchain.Block
+		for _, bn := range(blockNodes) {
+			if bn.Block.PrevHash == blockRequest.BlockHash {
+				children = append(children, bn.Block)
+			}
+		}
+
 		code := CheckStatusCode(libminer.InvalidBlockHashError(blockRequest.BlockHash))
 		return errors.New(code)
 	}
