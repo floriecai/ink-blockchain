@@ -264,7 +264,7 @@ func (canvas CanvasT) GetSvgString(shapeHash string) (svgString string, err erro
 	}
 
 	svgString = utils.GetHTMLSVGString(resp.Op)
-	return svgString, InvalidShapeHashError(shapeHash)
+	return svgString, nil
 }
 
 // Returns the amount of ink currently available.
@@ -341,7 +341,7 @@ func (canvas CanvasT) GetShapes(blockHash string) (shapeHashes []string, err err
 		shapeHashes = append(shapeHashes, opInfo.OpSig)
 	}
 
-	return shapeHashes, InvalidBlockHashError(blockHash)
+	return shapeHashes, nil
 }
 
 // Returns the block hash of the genesis block.

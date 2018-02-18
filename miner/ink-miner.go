@@ -503,6 +503,7 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 		for _, opInfo := range BlockNodeArray[blockIndex].Block.OpHistory {
 			if opInfo.OpSig == opRequest.ShapeHash {
 				response.Op = opInfo.Op
+				return nil
 			}
 		}
 
@@ -1211,6 +1212,9 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
+			if len(block.PrevHash) < 6 || len(block.MinerPubKey) < 6 {
+				continue
+			}
 			fmt.Print("<- ", block.PrevHash[0:5], ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
