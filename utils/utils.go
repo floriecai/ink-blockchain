@@ -219,7 +219,7 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 				point.Y = command.GetY()
 			}
 		}
-		if point.X > canvasX || point.Y > canvasY {
+		if point.X > canvasX || point.Y > canvasY || point.X < 0 || point.Y < 0 {
 			return path, libminer.OutOfBoundsError{}
 		}
 
@@ -317,7 +317,7 @@ func GetParsedCirc(op blockchain.Operation, canvasX int, canvasY int) (shapelib.
 		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
 	}
 
-	if x+r > uint64(canvasX) || y+r > uint64(canvasY) {
+	if x+r > uint64(canvasX) || y+r > uint64(canvasY) || x-r < 0 || y-r < 0{
 		return circ, libminer.OutOfBoundsError{}
 	}
 
