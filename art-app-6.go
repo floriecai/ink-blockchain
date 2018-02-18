@@ -45,7 +45,7 @@ func main() {
 	fmt.Println(canvas)
 	fmt.Println(settings)
 
-	generateHTML(canvas)
+	generateHTML(canvas, settings)
 
 	// Close the canvas.
 	ink1, err := canvas.CloseCanvas()
@@ -71,7 +71,6 @@ func getLongestBlockchain(currBlockHash string, canvas blockartlib.Canvas) []str
 	// Iterate through children of current block if any exist,
 	// Adding the longest of them all to the longest blockchain
 	children, err := canvas.GetChildren(currBlockHash)
-	fmt.Println("GetChildren")
 	checkError(err)
 
 	longestChildBlockchain := []string{}
@@ -87,7 +86,7 @@ func getLongestBlockchain(currBlockHash string, canvas blockartlib.Canvas) []str
 
 // Generate an HTML file, filled exclusively with 
 // HTML SVG strings from the longest blockchain in canvas
-func generateHTML(canvas blockartlib.Canvas) {
+func generateHTML(canvas blockartlib.Canvas, settings blockartlib.CanvasSettings) {
 	// Create a blank HTML file
 	HTML, err := os.Create("./art-app.html")
 	checkError(err)
@@ -95,7 +94,8 @@ func generateHTML(canvas blockartlib.Canvas) {
 
 	// Append starting HTML tags
 	pre := []byte("<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
-	body := []byte("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"900\" height=\"900\" version=\"1.1\">\n")
+	bodyString := fmt.Sprintf("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" version=\"1.1\">\n", settings.CanvasXMax, settings.CanvasYMax)
+	body := []byte(bodyString)
 	HTML.Write(pre)
 	HTML.Write(body)
 
@@ -107,9 +107,9 @@ func generateHTML(canvas blockartlib.Canvas) {
 	blockchain := getLongestBlockchain(gHash, canvas)
 
 	// Add the HTML SVG string of each opeartion in the blockchain
+	fmt.Println("GetShapes")
 	for _, bHash := range blockchain {
 		sHashes, err := canvas.GetShapes(bHash)
-		fmt.Println("GetShapes")
 		checkError(err)
 		for _, sHash := range sHashes {
 			HTMLSVGString, err := canvas.GetSvgString(sHash)
