@@ -50,13 +50,13 @@ func main() {
 	validateNum := uint8(3)
 
 	// Jan's SVG -- Part 1
-	svg5 := "M 850 850 L850 50 50 50 50 850 850 850 M 750 750 150 750 150 150 750 150 750 750"
+	svg5 := "M 850 850 L 850 50 L 50 50 L 50 850 L 850 850 M 750 750 L 150 750 L 150 150 L 750 150 L 750 750"
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg5, "darkgrey", "darkgrey")
 	checkError(err)
-	svg6 := "M 885 885 L885 15 15 15 15 885 885 885 M 860 860 40 860 40 40 860 40 860 860"
+	svg6 := "M 885 885 L 885 15 L 15 15 L 15 885 L 885 885 M 860 860 L 40 860 L 40 40 L 860 40 L 860 860"
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg6, "#232323", "darkgrey")
 	checkError(err)
-	svg7 := "M 550 674 L700 449 550 224 350 224 200 449 350 674 550 674 M540 654 L678 449 540 244 360 244 222 449 360 654 540 654"
+	svg7 := "M 550 674 L 700 449 L 550 224 L 350 224 L 200 449 L 350 674 L 550 674 L M 540 654 L 678 449 L 540 244 L 360 244 L 222 449 L 360 654 L 540 654"
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg7, "#666666", "darkgrey")
 	checkError(err)
 
