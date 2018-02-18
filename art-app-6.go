@@ -87,7 +87,7 @@ func getLongestBlockchain(currBlockHash string, canvas blockartlib.Canvas) []str
 
 // Generate an HTML file, filled exclusively with 
 // HTML SVG strings from the longest blockchain in canvas
-func generateHTML(canvas blockartlib.Canvas) {
+func generateHTML(canvas blockartlib.Canvas, settings blockartlib.CanvasSettings) {
 	// Create a blank HTML file
 	HTML, err := os.Create("./art-app.html")
 	checkError(err)
