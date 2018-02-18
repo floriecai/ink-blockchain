@@ -48,20 +48,20 @@ func (c LCommand) IsRelative() bool { return !c.IsAbsolute }
 
 type HCommand struct {
 	IsAbsolute bool
-	Y          int
+	X          int
 }
 
-func (c HCommand) GetX() int        { return -1 }
-func (c HCommand) GetY() int        { return c.Y }
+func (c HCommand) GetX() int        { return c.X }
+func (c HCommand) GetY() int        { return -1 }
 func (c HCommand) IsRelative() bool { return !c.IsAbsolute }
 
 type VCommand struct {
 	IsAbsolute bool
-	X          int
+	Y          int
 }
 
-func (c VCommand) GetX() int        { return c.X }
-func (c VCommand) GetY() int        { return -1 }
+func (c VCommand) GetX() int        { return -1 }
+func (c VCommand) GetY() int        { return c.Y }
 func (c VCommand) IsRelative() bool { return !c.IsAbsolute }
 
 type ZCommand struct{}
@@ -154,9 +154,9 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 			}
 
 			if token == "V" {
-				svgCommand = VCommand{X: param1, IsAbsolute: token != "v"}
+				svgCommand = VCommand{Y: param1, IsAbsolute: token != "v"}
 			} else {
-				svgCommand = HCommand{Y: param1, IsAbsolute: token != "h"}
+				svgCommand = HCommand{X: param1, IsAbsolute: token != "h"}
 			}
 			svgPath = append(svgPath, svgCommand)
 			i += 2
@@ -195,11 +195,11 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 				point.X = points[i-1].X + command.GetX()
 				point.Y = points[i-1].Y + command.GetY()
 			case VCommand:
-				point.X = points[i-1].X + command.GetX()
-				point.Y = points[i-1].Y
-			case HCommand:
 				point.X = points[i-1].X
 				point.Y = points[i-1].Y + command.GetY()
+			case HCommand:
+				point.X = points[i-1].X + command.GetX()
+				point.Y = points[i-1].Y
 			default:
 				fmt.Println("Error in svgToPoints: Command isn't relative")
 			}
@@ -208,6 +208,12 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 			case ZCommand:
 				point.X = points[0].X
 				point.Y = points[0].Y
+			case HCommand:
+				point.X = command.GetX()
+				point.Y = points[i-1].Y
+			case VCommand:
+				point.X = points[i-1].X
+				point.Y = command.GetY()
 			default:
 				point.X = command.GetX()
 				point.Y = command.GetY()
@@ -249,6 +255,8 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 				if points[i].Moved {
 					if startPoint.X != prevPoint.X ||
 						startPoint.Y != prevPoint.Y {
+						fmt.Println("ERROR: sX pX sY pY", startPoint.X,
+							prevPoint.X, startPoint.Y, prevPoint.Y)
 						return path, libminer.InvalidShapeSvgStringError("")
 					}
 
@@ -261,6 +269,8 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 			// Check the last moved section
 			if startPoint.X != prevPoint.X ||
 				startPoint.Y != prevPoint.Y {
+				fmt.Println("ERROR2: sX pX sY pY", startPoint.X,
+					prevPoint.X, startPoint.Y, prevPoint.Y)
 				return path, libminer.InvalidShapeSvgStringError("")
 			}
 		}

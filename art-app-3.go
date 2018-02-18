@@ -56,7 +56,7 @@ func main() {
 	svg6 := "M 885 885 L 885 15 L 15 15 L 15 885 L 885 885 M 860 860 L 40 860 L 40 40 L 860 40 L 860 860"
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg6, "#232323", "darkgrey")
 	checkError(err)
-	svg7 := "M 550 674 L 700 449 L 550 224 L 350 224 L 200 449 L 350 674 L 550 674 L M 540 654 L 678 449 L 540 244 L 360 244 L 222 449 L 360 654 L 540 654"
+	svg7 := "M 550 674 L 700 449 L 550 224 H 350 L 200 449 L 350 674 H 550 M 540 654 L 678 449 L 540 244 H 360 L 222 449 L 360 654 H 540"
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg7, "#666666", "darkgrey")
 	checkError(err)
 
