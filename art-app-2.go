@@ -55,7 +55,7 @@ func main() {
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg1, "transparent", "blue")
 	checkError(err)
 
-	svg2 := fmt.Sprintf("M %d %d l -5 0", settings.CanvasXMax, settings.CanvasYMax - 5)
+	svg2 := fmt.Sprintf("M %d %d h -5", settings.CanvasXMax, settings.CanvasYMax - 5)
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg2, "transparent", "blue")
 	checkError(err)
 
@@ -64,7 +64,7 @@ func main() {
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg3, "transparent", "blue")
 	checkError(err)
 
-	svg4 := fmt.Sprintf("M %d %d l 0 -5", settings.CanvasXMax, settings.CanvasYMax - 5)
+	svg4 := fmt.Sprintf("M %d %d v -5", settings.CanvasXMax - 5, settings.CanvasYMax)
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, svg4, "transparent", "blue")
 	checkError(err)
 
