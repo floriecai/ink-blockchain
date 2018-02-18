@@ -402,7 +402,7 @@ func (canvas CanvasT) CloseCanvas() (inkRemaining uint32, err error) {
 
 	err = canvas.Miner.Call("LibMinerInterface.GetInk", &req, &resp)
 	err = checkError(err)
-	return inkRemaining, err
+	return resp.InkRemaining, err
 }
 
 // The constructor for a new Canvas object instance. Takes the miner's

@@ -810,6 +810,7 @@ func CalculateInk(minerKey string) int {
 			}
 		}
 	}
+	fmt.Println("this miner has this much ink:", int(inkAmt))
 	return int(inkAmt)
 }
 
@@ -1239,7 +1240,7 @@ func RecoverTemp() {
 		fmt.Printf("B%d : BlockHash: %s PrevHash: %s\n", i, GetBlockHash(pp), pp.PrevHash)
 	}
 
-	fmt.Println("")
+	//fmt.Println("")
 
 	// if len(blocks) >= 15 {
 	// 	defer RecoverTemp()
