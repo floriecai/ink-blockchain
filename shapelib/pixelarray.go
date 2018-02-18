@@ -17,12 +17,12 @@ import (
 // Returns a new pixel array that is fully zeroed.
 func NewPixelArray(xMax int, yMax int) PixelArray {
 	// create rows
-	a := make([][]byte, yMax)
+	a := make([][]byte, yMax + 1)
 
 	// Initialize the number of bytes required in each row
 	xSz := maxByte(xMax + 1)
 
-	for y := 0; y < yMax; y++ {
+	for y := 0; y < yMax + 1; y++ {
 		// create compressed columns (one bit per pixel)
 		a[y] = make([]byte, xSz)
 
@@ -149,6 +149,14 @@ func (a *PixelSubArray) set(x, y int) {
 	xByte := x/8 - a.xStartByte
 	xBit := uint(x % 8)
 	yRow := y - a.yStart
+
+	if yRow > len(a.bytes) {
+		fmt.Println("Y OOB:", len(a.bytes), yRow)
+	}
+
+	if xByte > len(a.bytes[0]) {
+		fmt.Println("X OOB:", len(a.bytes[0]), xByte)
+	}
 
 	a.bytes[yRow][xByte] |= (1 << xBit)
 }

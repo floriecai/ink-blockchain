@@ -170,7 +170,7 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 	CheckError(err, "OpenLibMinerConn:Listen")
 
 	fmt.Println("Start writing ip:port to file")
-	f, err := os.Open("./ip-ports.txt")
+	f, err := os.Create("./ip-ports.txt")
 	_ = CheckError(err, "OpenLibMinerConn:os.Create")
 	f.Write([]byte(tcp.Addr().String()))
 	f.Write([]byte("\n"))
@@ -480,6 +480,18 @@ func (lmi *LibMinerInterface) GetBlock(req *libminer.Request, response *libminer
 			return nil
 		}
 
+		BlockArrayMutex.Lock()
+		blockNodes := make([]blockchain.BlockNode, len(BlockNodeArray))
+		copy(blockNodes, BlockNodeArray)
+		BlockArrayMutex.Unlock()
+
+		var children []blockchain.Block
+		for _, bn := range(blockNodes) {
+			if bn.Block.PrevHash == blockRequest.BlockHash {
+				children = append(children, bn.Block)
+			}
+		}
+
 		code := CheckStatusCode(libminer.InvalidBlockHashError(blockRequest.BlockHash))
 		return errors.New(code)
 	}
@@ -503,6 +515,7 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 		for _, opInfo := range BlockNodeArray[blockIndex].Block.OpHistory {
 			if opInfo.OpSig == opRequest.ShapeHash {
 				response.Op = opInfo.Op
+				return nil
 			}
 		}
 
@@ -809,6 +822,7 @@ func CalculateInk(minerKey string) int {
 			}
 		}
 	}
+	fmt.Println("this miner has this much ink:", int(inkAmt))
 	return int(inkAmt)
 }
 
@@ -1211,6 +1225,9 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
+			if len(block.PrevHash) < 6 || len(block.MinerPubKey) < 6 {
+				continue
+			}
 			fmt.Print("<- ", block.PrevHash[0:5], ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
@@ -1235,7 +1252,7 @@ func RecoverTemp() {
 		fmt.Printf("B%d : BlockHash: %s PrevHash: %s\n", i, GetBlockHash(pp), pp.PrevHash)
 	}
 
-	fmt.Println("")
+	//fmt.Println("")
 
 	// if len(blocks) >= 15 {
 	// 	defer RecoverTemp()

@@ -54,14 +54,14 @@ func main() {
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 5 0", "transparent", "red")
 	checkError(err)
 
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 0", "transparent", "red")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 5 L 5 5", "transparent", "red")
 	checkError(err)
 
 	// Draw vertical lines
 	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 0 0 L 0 5", "transparent", "red")
 	checkError(err)
 
-	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 0 5", "transparent", "red")
+	_, _, _, err = canvas.AddShape(validateNum, blockartlib.PATH, "M 5 0 L 5 5", "transparent", "red")
 	checkError(err)
 
 	// Close the canvas.
