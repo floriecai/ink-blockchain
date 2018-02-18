@@ -170,7 +170,7 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 	CheckError(err, "OpenLibMinerConn:Listen")
 
 	fmt.Println("Start writing ip:port to file")
-	f, err := os.Open("./ip-ports.txt")
+	f, err := os.Create("./ip-ports.txt")
 	_ = CheckError(err, "OpenLibMinerConn:os.Create")
 	f.Write([]byte(tcp.Addr().String()))
 	f.Write([]byte("\n"))
