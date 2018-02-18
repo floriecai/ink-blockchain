@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -90,9 +89,9 @@ func GetHTMLSVGString(op blockchain.Operation) string {
 		reNumber := regexp.MustCompile(`(\d)+`)
 		numbers := reNumber.FindAllString(op.SVGString, -1)
 		cx, cy, r := numbers[0], numbers[1], numbers[2]
-		return fmt.Sprintf("<circle cx=\"%s\" cy=\"%s\" r=\"%s\" fill=\"%s\" stroke=\"%s\">", cx, cy, r, fill, stroke)
+		return fmt.Sprintf("<circle cx=\"%s\" cy=\"%s\" r=\"%s\" fill=\"%s\" stroke=\"%s\"/>", cx, cy, r, fill, stroke)
 	} else {
-		return fmt.Sprintf("<path d=\"%s\" fill=\"%s\" fill-rule=\"evenodd\" stroke=\"%s\">", op.SVGString, fill, stroke)
+		return fmt.Sprintf("<path d=\"%s\" fill=\"%s\" fill-rule=\"evenodd\" stroke=\"%s\"/>", op.SVGString, fill, stroke)
 	}
 }
 
@@ -165,7 +164,7 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 			svgPath = append(svgPath, ZCommand{})
 			i++
 		} else {
-			log.Println("Command does not exist")
+			log.Println("Command does not exist", tokenUpper, token)
 			return svgPath, err
 		}
 	}
@@ -178,11 +177,6 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 // - OutOfBoundsError
 // - InvalidShapeSvgStringError
 func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeFilled bool) (path shapelib.Path, err error) {
-	maxX := -1
-	maxY := -1
-	minX := canvasX + 1
-	minY := canvasY + 1
-
 	points := make([]shapelib.Point, 0)
 	// Path consists of reference
 	for i, command := range svgPath {
@@ -222,12 +216,6 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 		if point.X > canvasX || point.Y > canvasY {
 			return path, libminer.OutOfBoundsError{}
 		}
-
-		minX = int(math.Min(float64(minX), float64(point.X)))
-		minY = int(math.Min(float64(minY), float64(point.Y)))
-
-		maxX = int(math.Max(float64(minX), float64(point.X)))
-		maxY = int(math.Max(float64(minY), float64(point.Y)))
 
 		points = append(points, point)
 	}
@@ -278,14 +266,7 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 		}
 	}
 
-	path = shapelib.Path{
-		XMax:         maxX,
-		YMax:         maxY,
-		XMin:         minX,
-		YMin:         minY,
-		Points:       points,
-		Filled:       filled,
-		StrokeFilled: strokeFilled}
+	path = shapelib.NewPath(points, filled, strokeFilled)
 
 	//fmt.Printf("\n\n")
 	//fmt.Printf("Paths is: %#v", path)
