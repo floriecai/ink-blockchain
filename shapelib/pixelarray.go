@@ -158,7 +158,6 @@ func (a *PixelSubArray) set(x, y int) {
 		fmt.Println("X OOB:", len(a.bytes[0]), xByte)
 	}
 
-	fmt.Println("")
 	a.bytes[yRow][xByte] |= (1 << xBit)
 }
 
