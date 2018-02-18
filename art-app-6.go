@@ -45,7 +45,7 @@ func main() {
 	fmt.Println(canvas)
 	fmt.Println(settings)
 
-	generateHTML(canvas)
+	generateHTML(canvas, settings)
 
 	// Close the canvas.
 	ink1, err := canvas.CloseCanvas()
