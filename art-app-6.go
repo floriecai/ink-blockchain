@@ -71,7 +71,6 @@ func getLongestBlockchain(currBlockHash string, canvas blockartlib.Canvas) []str
 	// Iterate through children of current block if any exist,
 	// Adding the longest of them all to the longest blockchain
 	children, err := canvas.GetChildren(currBlockHash)
-	fmt.Println("GetChildren")
 	checkError(err)
 
 	longestChildBlockchain := []string{}
@@ -108,9 +107,9 @@ func generateHTML(canvas blockartlib.Canvas, settings blockartlib.CanvasSettings
 	blockchain := getLongestBlockchain(gHash, canvas)
 
 	// Add the HTML SVG string of each opeartion in the blockchain
+	fmt.Println("GetShapes")
 	for _, bHash := range blockchain {
 		sHashes, err := canvas.GetShapes(bHash)
-		fmt.Println("GetShapes")
 		checkError(err)
 		for _, sHash := range sHashes {
 			HTMLSVGString, err := canvas.GetSvgString(sHash)
