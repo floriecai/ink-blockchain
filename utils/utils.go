@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -49,20 +48,20 @@ func (c LCommand) IsRelative() bool { return !c.IsAbsolute }
 
 type HCommand struct {
 	IsAbsolute bool
-	Y          int
+	X          int
 }
 
-func (c HCommand) GetX() int        { return -1 }
-func (c HCommand) GetY() int        { return c.Y }
+func (c HCommand) GetX() int        { return c.X }
+func (c HCommand) GetY() int        { return -1 }
 func (c HCommand) IsRelative() bool { return !c.IsAbsolute }
 
 type VCommand struct {
 	IsAbsolute bool
-	X          int
+	Y          int
 }
 
-func (c VCommand) GetX() int        { return c.X }
-func (c VCommand) GetY() int        { return -1 }
+func (c VCommand) GetX() int        { return -1 }
+func (c VCommand) GetY() int        { return c.Y }
 func (c VCommand) IsRelative() bool { return !c.IsAbsolute }
 
 type ZCommand struct{}
@@ -84,7 +83,16 @@ func GetHTMLSVGString(op blockchain.Operation) string {
 		fill = op.Fill
 		stroke = op.Stroke
 	}
-	return fmt.Sprintf("<path d=\"%s\" fill=\"%s\" stroke=\"%s\">", op.SVGString, fill, stroke)
+
+	reCircle := regexp.MustCompile(`circle x:(\d+) y:(\d+) r:(\d+)`)
+	if reCircle.MatchString(op.SVGString) {
+		reNumber := regexp.MustCompile(`(\d)+`)
+		numbers := reNumber.FindAllString(op.SVGString, -1)
+		cx, cy, r := numbers[0], numbers[1], numbers[2]
+		return fmt.Sprintf("<circle cx=\"%s\" cy=\"%s\" r=\"%s\" fill=\"%s\" stroke=\"%s\"/>", cx, cy, r, fill, stroke)
+	} else {
+		return fmt.Sprintf("<path d=\"%s\" fill=\"%s\" fill-rule=\"evenodd\" stroke=\"%s\"/>", op.SVGString, fill, stroke)
+	}
 }
 
 // Parses a string into a list of SVGCommands
@@ -146,9 +154,9 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 			}
 
 			if token == "V" {
-				svgCommand = VCommand{X: param1, IsAbsolute: token != "v"}
+				svgCommand = VCommand{Y: param1, IsAbsolute: token != "v"}
 			} else {
-				svgCommand = HCommand{Y: param1, IsAbsolute: token != "h"}
+				svgCommand = HCommand{X: param1, IsAbsolute: token != "h"}
 			}
 			svgPath = append(svgPath, svgCommand)
 			i += 2
@@ -156,7 +164,7 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 			svgPath = append(svgPath, ZCommand{})
 			i++
 		} else {
-			log.Println("Command does not exist")
+			log.Println("Command does not exist", tokenUpper, token)
 			return svgPath, err
 		}
 	}
@@ -169,11 +177,6 @@ func GetParsedSVG(svgString string) (svgPath SVGPath, err error) {
 // - OutOfBoundsError
 // - InvalidShapeSvgStringError
 func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeFilled bool) (path shapelib.Path, err error) {
-	maxX := -1
-	maxY := -1
-	minX := canvasX + 1
-	minY := canvasY + 1
-
 	points := make([]shapelib.Point, 0)
 	// Path consists of reference
 	for i, command := range svgPath {
@@ -192,11 +195,11 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 				point.X = points[i-1].X + command.GetX()
 				point.Y = points[i-1].Y + command.GetY()
 			case VCommand:
-				point.X = points[i-1].X + command.GetX()
-				point.Y = points[i-1].Y
-			case HCommand:
 				point.X = points[i-1].X
 				point.Y = points[i-1].Y + command.GetY()
+			case HCommand:
+				point.X = points[i-1].X + command.GetX()
+				point.Y = points[i-1].Y
 			default:
 				fmt.Println("Error in svgToPoints: Command isn't relative")
 			}
@@ -205,20 +208,20 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 			case ZCommand:
 				point.X = points[0].X
 				point.Y = points[0].Y
+			case HCommand:
+				point.X = command.GetX()
+				point.Y = points[i-1].Y
+			case VCommand:
+				point.X = points[i-1].X
+				point.Y = command.GetY()
 			default:
 				point.X = command.GetX()
 				point.Y = command.GetY()
 			}
 		}
-		if point.X > canvasX || point.Y > canvasY {
+		if point.X > canvasX || point.Y > canvasY || point.X < 0 || point.Y < 0 {
 			return path, libminer.OutOfBoundsError{}
 		}
-
-		minX = int(math.Min(float64(minX), float64(point.X)))
-		minY = int(math.Min(float64(minY), float64(point.Y)))
-
-		maxX = int(math.Max(float64(minX), float64(point.X)))
-		maxY = int(math.Max(float64(minY), float64(point.Y)))
 
 		points = append(points, point)
 	}
@@ -252,6 +255,8 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 				if points[i].Moved {
 					if startPoint.X != prevPoint.X ||
 						startPoint.Y != prevPoint.Y {
+						fmt.Println("ERROR: sX pX sY pY", startPoint.X,
+							prevPoint.X, startPoint.Y, prevPoint.Y)
 						return path, libminer.InvalidShapeSvgStringError("")
 					}
 
@@ -264,19 +269,14 @@ func SVGToPoints(svgPath SVGPath, canvasX int, canvasY int, filled bool, strokeF
 			// Check the last moved section
 			if startPoint.X != prevPoint.X ||
 				startPoint.Y != prevPoint.Y {
+				fmt.Println("ERROR2: sX pX sY pY", startPoint.X,
+					prevPoint.X, startPoint.Y, prevPoint.Y)
 				return path, libminer.InvalidShapeSvgStringError("")
 			}
 		}
 	}
 
-	path = shapelib.Path{
-		XMax:         maxX,
-		YMax:         maxY,
-		XMin:         minX,
-		YMin:         minY,
-		Points:       points,
-		Filled:       filled,
-		StrokeFilled: strokeFilled}
+	path = shapelib.NewPath(points, filled, strokeFilled)
 
 	//fmt.Printf("\n\n")
 	//fmt.Printf("Paths is: %#v", path)
@@ -317,7 +317,7 @@ func GetParsedCirc(op blockchain.Operation, canvasX int, canvasY int) (shapelib.
 		return circ, libminer.InvalidShapeSvgStringError(op.SVGString)
 	}
 
-	if x+r > uint64(canvasX) || y+r > uint64(canvasY) {
+	if x+r > uint64(canvasX) || y+r > uint64(canvasY) || x-r < 0 || y-r < 0{
 		return circ, libminer.OutOfBoundsError{}
 	}
 

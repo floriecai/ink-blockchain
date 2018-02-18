@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"net"
 	"net/rpc"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -46,7 +47,7 @@ const (
 	// Global TTL of propagate requests
 	TTL = 2
 	// Maximum threads we will use for problem solving
-	MAX_THREADS = 2
+	MAX_THREADS = 1
 	// Num new blocks with no operation before repropagating op
 	BLOCKS_BEFORE_REPROPAGATE = 10
 )
@@ -167,6 +168,14 @@ func OpenLibMinerConn(ip string, pop chan PropagateOpArgs, sop chan blockchain.O
 
 	tcp, err := net.Listen("tcp", ip)
 	CheckError(err, "OpenLibMinerConn:Listen")
+
+	fmt.Println("Start writing ip:port to file")
+	f, err := os.Create("./ip-ports.txt")
+	_ = CheckError(err, "OpenLibMinerConn:os.Create")
+	f.Write([]byte(tcp.Addr().String()))
+	f.Write([]byte("\n"))
+	f.Close()
+	fmt.Println("Finished writing to file")
 
 	MinerInstance.LMI = lib_miner_int
 
@@ -471,6 +480,18 @@ func (lmi *LibMinerInterface) GetBlock(req *libminer.Request, response *libminer
 			return nil
 		}
 
+		BlockArrayMutex.Lock()
+		blockNodes := make([]blockchain.BlockNode, len(BlockNodeArray))
+		copy(blockNodes, BlockNodeArray)
+		BlockArrayMutex.Unlock()
+
+		var children []blockchain.Block
+		for _, bn := range(blockNodes) {
+			if bn.Block.PrevHash == blockRequest.BlockHash {
+				children = append(children, bn.Block)
+			}
+		}
+
 		code := CheckStatusCode(libminer.InvalidBlockHashError(blockRequest.BlockHash))
 		return errors.New(code)
 	}
@@ -494,6 +515,7 @@ func (lmi *LibMinerInterface) GetOp(req *libminer.Request, response *libminer.Op
 		for _, opInfo := range BlockNodeArray[blockIndex].Block.OpHistory {
 			if opInfo.OpSig == opRequest.ShapeHash {
 				response.Op = opInfo.Op
+				return nil
 			}
 		}
 
@@ -800,6 +822,7 @@ func CalculateInk(minerKey string) int {
 			}
 		}
 	}
+	fmt.Println("this miner has this much ink:", int(inkAmt))
 	return int(inkAmt)
 }
 
@@ -1202,6 +1225,9 @@ func PrintBlockChain(blocks []blockchain.Block) {
 	fmt.Println("Current amount of blocks we have: ", len(BlockHashMap))
 	for i, block := range blocks {
 		if i != 0 {
+			if len(block.PrevHash) < 6 || len(block.MinerPubKey) < 6 {
+				continue
+			}
 			fmt.Print("<- ", block.PrevHash[0:5], ":", block.MinerPubKey[len(block.MinerPubKey)-5:], ":")
 			for _, opinfo := range block.OpHistory {
 				if opinfo.Op.OpType == blockchain.ADD {
@@ -1226,7 +1252,7 @@ func RecoverTemp() {
 		fmt.Printf("B%d : BlockHash: %s PrevHash: %s\n", i, GetBlockHash(pp), pp.PrevHash)
 	}
 
-	fmt.Println("")
+	//fmt.Println("")
 
 	// if len(blocks) >= 15 {
 	// 	defer RecoverTemp()
@@ -1250,12 +1276,31 @@ func Recover() {
 	}
 }
 
+// Code from https://gist.github.com/jniltinho/9787946
+func GeneratePublicIP() string {
+	addrs, err := net.InterfaceAddrs()
+	CheckError(err, "GeneratePublicIP")
+
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String() + ":"
+			}
+		}
+	}
+
+	return "Could not find IP"
+}
+
 /*******************************
 | Main
 ********************************/
 func Mine(serverIP, pubKey, privKey string) {
 	gob.Register(&net.TCPAddr{})
 	gob.Register(&elliptic.CurveParams{})
+	// serverIP, pubKey, privKey := os.Args[1], os.Args[2], os.Args[3]
+	serverIP = os.Args[1]
+
 	BlockCond = &sync.Cond{L: &sync.Mutex{}}
 
 	// 1. Setup the singleton miner instance
@@ -1263,7 +1308,10 @@ func Mine(serverIP, pubKey, privKey string) {
 	// Extract key pairs
 	ExtractKeyPairs(pubKey, privKey)
 	// Listening Address
-	ln, _ := net.Listen("tcp", ":0")
+	publicIP := GeneratePublicIP()
+	fmt.Println(publicIP)
+
+	ln, _ := net.Listen("tcp", publicIP)
 	addr := ln.Addr()
 	MinerInstance.Addr = addr
 

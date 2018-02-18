@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"os"
 )
 
 // To encode publicKey use:
@@ -23,7 +24,6 @@ func main() {
 	priv1, _ := ecdsa.GenerateKey(p384, rand.Reader)
 
 	privateKeyBytes, _ := x509.MarshalECPrivateKey(priv1)
-
 	encodedPrivateBytes := hex.EncodeToString(privateKeyBytes)
 
 	privateKeyBytesRestored, _ := hex.DecodeString(encodedPrivateBytes)
@@ -46,4 +46,18 @@ func main() {
 
 	fmt.Printf("Key was restored from string successfully\n")
 	fmt.Printf("go run ink-miner.go 127.0.0.1:12345 %s %s\n", encodedPublicBytes, encodedPrivateBytes)
+
+	// Write key pair to file
+	fmt.Println("Start writing to file")
+	f, err := os.Create("./key-pairs.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	f.Write([]byte(encodedPrivateBytes))
+	f.Write([]byte("\n"))
+	f.Write([]byte(encodedPublicBytes))
+	f.Write([]byte("\n"))
+	f.Close()
+	fmt.Println("Finished writing to file")
 }
