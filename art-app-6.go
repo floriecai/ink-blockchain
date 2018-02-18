@@ -95,7 +95,8 @@ func generateHTML(canvas blockartlib.Canvas) {
 
 	// Append starting HTML tags
 	pre := []byte("<!DOCTYPE html>\n<html>\n<head>\n\t<title>HTML SVG Output</title>\n</head>\n")
-	body := []byte("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"900\" height=\"900\" version=\"1.1\">\n")
+	bodyString := fmt.Sprintf("<body>\n\t<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" version=\"1.1\">\n", settings.CanvasXMax, settings.CanvasYMax)
+	body := []byte(bodyString)
 	HTML.Write(pre)
 	HTML.Write(body)
 
